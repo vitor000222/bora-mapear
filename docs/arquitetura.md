@@ -45,6 +45,7 @@ mesma matriz. A IA escreve linhas da matriz. Nenhum modelo escreve XML, código 
 | **Visão** | Um mapeamento desenhado numa linguagem, com as correções dele. |
 | **Correções** | O que o usuário mudou na forma do desenho, chaveado pela chave da linha. Não mexem no conteúdo. |
 | **Registro de correção** | A diferença entre o que o renderizador gerou e o que o usuário deixou, em frases ("moveu *Analisar crédito* 40 px para a direita"). Alimenta o Agente Visual. |
+| **Subprocesso** | Uma etapa do tipo `subprocesso` pode apontar para outro mapeamento (`subprocesso: <id>`). O filho é um mapeamento comum; o vínculo mora só na matriz do pai, então mudar o vínculo é versão nova do pai. O filho descobre os pais procurando quem aponta para ele. |
 
 ## Duas edições, dois caminhos
 
@@ -66,8 +67,20 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
   que o layout do núcleo gera.
 - **Mermaid não tem posição.** Lá a correção é o próprio código editado, guardado como sobreposição da
   visão. Se a matriz muda, o usuário escolhe entre manter o código dele ou regerar.
-- **Importar de fora** (um `.bpmn` de outra ferramenta, um Mermaid colado): o importador BPMN é
-  determinístico; Mermaid → matriz passa pelo Agente Conversor quando o parser não cobrir.
+- **Importar de fora** (um `.bpmn` de outra ferramenta, um Mermaid colado, a matriz em CSV): os
+  importadores são determinísticos; o que eles não leem passa pelo Agente Conversor.
+
+## Exportar
+
+- **SVG, PNG e PDF** saem de um SVG. No BPMN é o `saveSVG` do bpmn-js; no Mermaid, o SVG que ele desenha
+  (com `htmlLabels: false`, sem `foreignObject`, para o canvas não ficar "sujo"); no React Flow, o
+  `renderizarSvg` do núcleo, que desenha a matriz com as posições atuais dos nós em SVG puro.
+- PNG é o SVG num `canvas` a 2x, fundo branco. PDF é vetorial (jsPDF + svg2pdf.js, carregados só quando
+  alguém pede), do tamanho exato do desenho, com o texto selecionável.
+- **CSV** é a matriz em planilha (`matrizParaCsv` / `csvParaMatriz`): separador `;`, BOM para o Excel abrir
+  com acento, uma linha por etapa, `proximos` como `E04: Sim, E10: Não`. Na volta aceita o tipo pelo
+  código ou pelo rótulo e vírgula decimal na confiança. A grade da Matriz exporta e importa; a lista
+  importa como mapeamento novo.
 
 ## Agentes
 
@@ -109,9 +122,13 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
 
 - **Padrão: SQLite num arquivo** (`data/bora.db`), com o módulo `node:sqlite` do próprio Node: nada para
   compilar, nem no Windows. Clonou, instalou, rodou.
-- **Opcional (fase 4): Postgres** via `DATABASE_URL` — o banco do próprio usuário ou o do `docker compose`.
-- O servidor fala com o banco por uma interface só (`Repositorio`, assíncrona). O Postgres entra como outra
-  implementação dela.
+- **Opcional: Postgres** via `DATABASE_URL` — o banco do próprio usuário ou o do `docker compose`.
+- O servidor fala com o banco por uma interface só (`Repositorio`, assíncrona), com duas implementações:
+  `RepositorioSqlite` e `RepositorioPostgres` (driver `pg`, JSONB, `SELECT … FOR UPDATE` para numerar
+  versões e evidências sem corrida). As migrações vivem no código: `PRAGMA user_version` no SQLite, a
+  tabela `bora_esquema` no Postgres.
+- Os testes da API rodam duas vezes, uma em cada banco; o Postgres dos testes é o PGlite (Postgres em
+  WebAssembly, em memória), então não precisa de Docker para rodar a suíte.
 - Matriz e correções gravadas como documento JSON. Versões de matriz são imutáveis.
 
 | Tabela | Guarda |
@@ -137,7 +154,8 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
 | Editores | bpmn-js, @xyflow/react, mermaid + CodeMirror, grade para a matriz | padrões de mercado |
 | Servidor | Hono sobre Node | leve, TypeScript nativo |
 | IA | `fetch` (compatível com OpenAI) + `@anthropic-ai/sdk` | sem camada intermediária; cobre OpenRouter, OpenAI, Gemini, Groq, DeepSeek, Ollama e Anthropic |
-| Banco | SQLite (`node:sqlite`); Postgres na fase 4 | sem dependência nativa |
+| Banco | SQLite (`node:sqlite`) ou Postgres (`pg`) | SQLite sem dependência nativa; Postgres para quem já tem um |
+| Exportar | SVG do próprio desenho; PNG pelo canvas; PDF por jsPDF + svg2pdf.js | sem servidor de renderização |
 | Testes | `node:test` | sem dependência |
 
 ## Licenças de terceiros que pesam
@@ -154,7 +172,7 @@ npm install
 npm run dev        # abre em http://127.0.0.1:5173, cria data/bora.db sozinho
 ```
 
-Postgres via `DATABASE_URL` chega na fase 4.
+Com Postgres: `DATABASE_URL=postgres://… npm start`, ou `docker compose up -d` (sobe Postgres e o app).
 
 ## Hospedar depois (boramapear)
 

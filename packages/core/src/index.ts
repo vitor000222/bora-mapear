@@ -6,12 +6,14 @@ export * from './correcoes.ts';
 export * from './renderizadores/bpmn.ts';
 export * from './renderizadores/mermaid.ts';
 export * from './renderizadores/reactflow.ts';
+export * from './renderizadores/svg.ts';
 export * from './previa.ts';
 export * from './operacoes.ts';
 export * from './comparar.ts';
 export * from './estilo.ts';
 export * from './importar-bpmn.ts';
 export * from './importar-mermaid.ts';
+export * from './csv.ts';
 
 import type { Matriz } from './matriz.ts';
 import type { Correcoes } from './correcoes.ts';

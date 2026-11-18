@@ -1,17 +1,12 @@
-import { test, beforeEach, afterEach } from 'node:test';
+import { test, beforeEach, afterEach, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { calcularLayout, type Matriz } from '@bora-mapear/core';
 import { criarApp } from '../src/app.ts';
-import { RepositorioSqlite } from '../src/sqlite.ts';
+import type { Repositorio } from '../src/repositorio.ts';
+import { BANCOS } from './bancos.ts';
 
-let repo: RepositorioSqlite;
+let repo: Repositorio;
 let app: ReturnType<typeof criarApp>;
-
-beforeEach(() => {
-  repo = new RepositorioSqlite(':memory:');
-  app = criarApp(repo);
-});
-afterEach(() => repo.fechar());
 
 async function pedir(metodo: string, caminho: string, corpo?: unknown) {
   const init: RequestInit = { method: metodo };
@@ -28,6 +23,13 @@ async function criarExemplo() {
   const { dados } = await pedir('POST', '/api/mapeamentos', { nome: 'Pedido de venda', linguagem: 'bpmn', modelo: 'exemplo' });
   return dados.id as string;
 }
+
+for (const banco of BANCOS) describe(banco.nome, () => {
+beforeEach(async () => {
+  repo = await banco.criar();
+  app = criarApp(repo);
+});
+afterEach(() => repo.fechar());
 
 test('cria em branco e abre com versão 1, matriz aprovada e visões vazias', async () => {
   const criado = await pedir('POST', '/api/mapeamentos', { nome: 'Onboarding de cliente', linguagem: 'mermaid' });
@@ -122,4 +124,37 @@ test('erros claros: corpo inválido, linguagem desconhecida, rota inexistente', 
   const lingua = await pedir('PUT', `/api/mapeamentos/${id}/visoes/visio/correcoes`, { correcoes: {} });
   assert.equal(lingua.status, 404);
   assert.equal((await pedir('GET', '/api/nada')).status, 404);
+});
+
+test('subprocesso: cria o mapeamento filho, liga ao pai e cada um sabe do outro', async () => {
+  const id = await criarExemplo();
+  const { dados: atual } = await pedir('GET', `/api/mapeamentos/${id}`);
+  const matriz = atual.matriz;
+  matriz.etapas.find((e: { chave: string }) => e.chave === 'E07').tipo = 'subprocesso';
+  await pedir('POST', `/api/mapeamentos/${id}/versoes`, { matriz, mensagem: 'E07 vira subprocesso' });
+  assert.equal((await pedir('POST', `/api/mapeamentos/${id}/subprocessos`, { chave: 'E02' })).status, 400, 'E02 não é subprocesso');
+  const r = await pedir('POST', `/api/mapeamentos/${id}/subprocessos`, { chave: 'E07' });
+  assert.equal(r.status, 201);
+  assert.equal(r.dados.filho.nome, 'Separar e embalar mercadoria');
+  assert.equal(r.dados.versaoPai, 3);
+  const pai = await pedir('GET', `/api/mapeamentos/${id}`);
+  assert.deepEqual(pai.dados.filhos, { E07: { id: r.dados.filho.id, nome: 'Separar e embalar mercadoria' } });
+  const filho = await pedir('GET', `/api/mapeamentos/${r.dados.filho.id}`);
+  assert.deepEqual(filho.dados.pais, [{ id, nome: 'Pedido de venda', chave: 'E07', etapa: 'Separar e embalar mercadoria' }]);
+  assert.equal((await pedir('POST', `/api/mapeamentos/${id}/subprocessos`, { chave: 'E07' })).status, 409);
+});
+
+test('importar planilha CSV', async () => {
+  const { matrizParaCsv, lerMatriz } = await import('@bora-mapear/core');
+  const { readFileSync } = await import('node:fs');
+  const m = lerMatriz(JSON.parse(readFileSync(new URL('../../../exemplos/pedido-de-venda.json', import.meta.url), 'utf8')));
+  const r = await pedir('POST', '/api/mapeamentos/importar', { nome: 'Da planilha', conteudo: matrizParaCsv(m) });
+  assert.equal(r.status, 201);
+  assert.equal(r.dados.validacao.ok, true);
+  const ruim = await pedir('POST', '/api/mapeamentos/importar', { nome: 'X', conteudo: ['chave;tipo', 'E1;tarefa'].join('\n') });
+  assert.equal(ruim.status, 422);
+  assert.match(ruim.dados.erro, /nome, raia/);
+  assert.equal(ruim.dados.detalhes.podeUsarIa, false);
+});
+
 });

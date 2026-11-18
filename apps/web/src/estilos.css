@@ -1348,3 +1348,30 @@ textarea.entrada {
   margin: 0;
   padding-left: 18px;
 }
+
+/* Exportar e subprocesso */
+.grupo-exportar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.botao-compacto {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+.barra-mermaid {
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.vinculo-subprocesso {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 4px 12px;
+  font-size: 14px;
+}
+.vinculo-subprocesso .entrada {
+  width: auto;
+  min-width: 220px;
+}

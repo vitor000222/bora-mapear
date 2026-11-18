@@ -2,7 +2,7 @@ import { useState, type FormEvent, type RefObject } from 'react';
 import { apiIa, ErroApi } from '../api.ts';
 import { useAvisos } from '../avisos.tsx';
 
-const ACEITOS = '.bpmn,.xml,.mmd,.mermaid,.md,.txt,.puml,.plantuml';
+const ACEITOS = '.bpmn,.xml,.mmd,.mermaid,.csv,.md,.txt,.puml,.plantuml';
 
 /** Importar um processo de outra ferramenta: BPMN e Mermaid sem IA; o resto, pelo Conversor. */
 export function Importar({ dialogo }: { dialogo: RefObject<HTMLDialogElement | null> }) {
@@ -60,7 +60,7 @@ export function Importar({ dialogo }: { dialogo: RefObject<HTMLDialogElement | n
       <form onSubmit={(e) => void importar(e)}>
         <h2 id="titulo-importar">Importar processo</h2>
         <p className="suave pequeno">
-          BPMN 2.0 (Camunda, bpmn.io, Bizagi, o próprio Bora Mapear) e fluxograma Mermaid entram direto, sem IA. Outro formato (PlantUML, lista de passos, tabela) passa
+          BPMN 2.0 (Camunda, bpmn.io, Bizagi, o próprio Bora Mapear), fluxograma Mermaid e a matriz em CSV entram direto, sem IA. Outro formato (PlantUML, lista de passos, tabela) passa
           pelo Conversor.
         </p>
         <label className="campo">

@@ -16,9 +16,11 @@
     "@xyflow/react": "^12.12.0",
     "bpmn-js": "^18.33.0",
     "bpmn-js-color-picker": "^0.7.2",
+    "jspdf": "^4.2.1",
     "mermaid": "^11.17.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "svg2pdf.js": "^2.9.0"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

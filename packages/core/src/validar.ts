@@ -19,7 +19,8 @@ export type CodigoProblema =
   | 'SAIDA_REPETIDA'
   | 'SAIDA_MULTIPLA_SEM_GATEWAY'
   | 'GATEWAY_INUTIL'
-  | 'RAIA_VAZIA';
+  | 'RAIA_VAZIA'
+  | 'SUBPROCESSO_EM_ETAPA_COMUM';
 
 export interface Problema {
   codigo: CodigoProblema;
@@ -116,6 +117,9 @@ export function validarMatriz(m: Matriz): ResultadoValidacao {
 
     if (familia === 'gateway' && nEntradas <= 1 && nSaidas === 1) {
       aviso('GATEWAY_INUTIL', `O gateway ${rotulo(etapa)} tem uma entrada e uma saída: não decide nem junta nada.`, etapa.chave);
+    }
+    if (etapa.subprocesso && etapa.tipo !== 'subprocesso') {
+      aviso('SUBPROCESSO_EM_ETAPA_COMUM', `${rotulo(etapa)} aponta para um mapeamento filho, mas não é do tipo subprocesso. Mude o tipo ou tire o vínculo.`, etapa.chave);
     }
     if ((familia === 'tarefa' || familia === 'subprocesso') && nSaidas > 1) {
       aviso('SAIDA_MULTIPLA_SEM_GATEWAY', `${rotulo(etapa)} tem ${nSaidas} saídas sem gateway. Se for decisão, use um gateway exclusivo; se for em paralelo, um gateway paralelo.`, etapa.chave);

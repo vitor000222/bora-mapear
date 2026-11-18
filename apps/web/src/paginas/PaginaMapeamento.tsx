@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { LINGUAGENS, type Correcoes, type Linguagem, type Matriz, type ResultadoValidacao } from '@bora-mapear/core';
-import { api, apiIa, ErroApi, NOMES_LINGUAGEM, type EstiloVisual, type MapeamentoCompleto } from '../api.ts';
+import { api, apiIa, ErroApi, NOMES_LINGUAGEM, type EstiloVisual, type MapeamentoCompleto, type ResumoMapeamento } from '../api.ts';
 import { useAvisos } from '../avisos.tsx';
 import { EditorMatriz } from '../componentes/EditorMatriz.tsx';
 import { VisaoBpmn } from '../componentes/VisaoBpmn.tsx';
@@ -27,9 +27,11 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
   const [rascunho, setRascunho] = useState<Matriz | null>(null);
   const [historicoVersao, setHistoricoVersao] = useState(0);
   const [estilo, setEstilo] = useState<EstiloVisual>({ versao: 1, regras: [] });
+  const [mapeamentos, setMapeamentos] = useState<ResumoMapeamento[]>([]);
 
   useEffect(() => {
     apiIa.estilo().then(setEstilo, () => {});
+    api.listar().then(setMapeamentos, () => {});
   }, []);
 
   const recarregar = useCallback(async () => {
@@ -73,7 +75,19 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
   }
   if (!dados) return <section className="pagina"><div className="cartao estado-carregando">Carregando…</div></section>;
 
-  const { mapeamento, matriz, validacao, visoes, versao } = dados;
+  const { mapeamento, matriz, validacao, visoes, versao, pais, filhos } = dados;
+
+  const criarFilho = async (chave: string) => {
+    try {
+      const r = await api.criarSubprocesso(id, chave);
+      avisar(`Mapeamento filho "${r.filho.nome}" criado e ligado (versão ${r.versaoPai}).`, 'sucesso');
+      setHistoricoVersao((n) => n + 1);
+      setMapeamentos(await api.listar());
+      await recarregar();
+    } catch (e) {
+      avisar(e instanceof Error ? e.message : String(e), 'erro');
+    }
+  };
   const linguagem = mapeamento.linguagem;
 
   const trocarLinguagem = async (l: Linguagem) => {
@@ -160,6 +174,18 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
       <a href="#/" className="voltar">
         ← Mapeamentos
       </a>
+      {pais.length > 0 && (
+        <p className="faixa-info pequeno">
+          Subprocesso de{' '}
+          {pais.map((p, i) => (
+            <span key={`${p.id}-${p.chave}`}>
+              {i > 0 && ', '}
+              <a href={`#/m/${p.id}`}>{p.nome}</a> (etapa {p.chave}, “{p.etapa}”)
+            </span>
+          ))}
+          .
+        </p>
+      )}
       <div className="mapa-cabecalho">
         <div className="mapa-titulo">
           <input
@@ -213,17 +239,18 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
               aoSalvar={(c, alertas) => salvarCorrecoes('bpmn', c, alertas)}
               aoSalvarVersao={salvarVersao}
               aoRevisarProposta={(m) => revisarProposta(m, 'A matriz do desenho')}
+              filhos={filhos}
             />
           )}
           {linguagem === 'reactflow' && (
-            <VisaoReactFlow matriz={matriz} correcoes={visoes.reactflow.correcoes} estilo={estilo} aoSalvar={(c) => salvarCorrecoes('reactflow', c)} />
+            <VisaoReactFlow matriz={matriz} correcoes={visoes.reactflow.correcoes} estilo={estilo} filhos={filhos} aoSalvar={(c) => salvarCorrecoes('reactflow', c)} />
           )}
           {linguagem === 'mermaid' && (
             <div className="cartao painel-mermaid">
               {visoes.mermaid.codigo !== null && (
                 <p className="faixa-info">Este desenho usa o código Mermaid editado à mão. Ele não acompanha mudanças na matriz.</p>
               )}
-              <DiagramaMermaid matriz={matriz} codigo={visoes.mermaid.codigo} estilo={estilo} />
+              <DiagramaMermaid matriz={matriz} codigo={visoes.mermaid.codigo} estilo={estilo} exportarComo={matriz.processo.id} />
             </div>
           )}
           {rascunho && <p className="faixa-info">O desenho mostra a versão salva. A matriz tem mudanças ainda não salvas.</p>}
@@ -239,6 +266,10 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
             aoMudar={setRascunho}
             aoDescartar={() => setRascunho(null)}
             aoSalvar={async (m, mensagem) => void (await salvarVersao(m, mensagem))}
+            idMapeamento={id}
+            mapeamentos={mapeamentos}
+            filhos={filhos}
+            aoCriarFilho={criarFilho}
           />
         </div>
       )}

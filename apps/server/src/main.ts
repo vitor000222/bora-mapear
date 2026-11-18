@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { criarApp } from './app.ts';
 import { RepositorioSqlite } from './sqlite.ts';
+import { bancoPostgres, RepositorioPostgres } from './postgres.ts';
+import type { Repositorio } from './repositorio.ts';
 import { Cofre } from './segredo.ts';
 import { Executor } from './execucoes.ts';
 
@@ -14,7 +16,16 @@ const caminhoBanco = resolve(process.env['BORA_DB'] ?? resolve(raizDoProjeto, 'd
 const estaticos = resolve(raizDoProjeto, 'apps/web/dist');
 
 mkdirSync(dirname(caminhoBanco), { recursive: true });
-const repo = new RepositorioSqlite(caminhoBanco);
+const urlPostgres = process.env['DATABASE_URL'];
+let repo: Repositorio;
+let descricaoBanco: string;
+if (urlPostgres) {
+  repo = await RepositorioPostgres.criar(bancoPostgres(urlPostgres));
+  descricaoBanco = `Postgres em ${new URL(urlPostgres).host}`;
+} else {
+  repo = new RepositorioSqlite(caminhoBanco);
+  descricaoBanco = caminhoBanco;
+}
 const cofre = Cofre.carregar(resolve(dirname(caminhoBanco), 'segredo.key'), process.env['BORA_SECRET']);
 const executor = new Executor(repo);
 const interrompidas = await repo.marcarInterrompidas();
@@ -27,13 +38,14 @@ const app = criarApp(repo, {
 
 const servidor = serve({ fetch: app.fetch, port: porta, hostname: host }, (info) => {
   console.log(`Bora Mapear no ar: http://${host}:${info.port}`);
-  console.log(`Banco: ${caminhoBanco}`);
+  console.log(`Banco: ${descricaoBanco}`);
 });
 
-const encerrar = () => {
+const encerrar = async () => {
   servidor.close();
-  repo.fechar();
+  await executor.aguardar();
+  await repo.fechar();
   process.exit(0);
 };
-process.on('SIGINT', encerrar);
-process.on('SIGTERM', encerrar);
+process.on('SIGINT', () => void encerrar());
+process.on('SIGTERM', () => void encerrar());

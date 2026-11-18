@@ -44,6 +44,14 @@ A matriz é o que o Bora Mapear guarda. Todo desenho sai dela. O schema oficial 
 | `evidencias` | não | Chaves das evidências que sustentam a linha (`EV-001`). O Mapeador sempre preenche. |
 | `confianca` | não | 0 a 1, autoavaliação do agente. |
 | `revisarHumano` | não | `true` quando o agente pede revisão. |
+| `subprocesso` | não | Só em etapa do tipo `subprocesso`: o id do mapeamento filho que a detalha. Em outro tipo, o portão avisa (`SUBPROCESSO_EM_ETAPA_COMUM`). |
+
+## Em CSV
+
+A mesma matriz vira planilha (`;` como separador, uma linha por etapa) e volta. As colunas são as dos campos
+acima, em minúsculas e com `_` (`revisar_humano`); `proximos` fica como `E04: Sim, E10: Não`. O tipo pode vir
+pelo código (`gateway_exclusivo`) ou pelo rótulo ("Decisão (um caminho)"), e a confiança aceita vírgula
+decimal. Raias sem etapa vão numa linha de comentário no fim (`# raias sem etapa: …`).
 
 ## Tipos
 

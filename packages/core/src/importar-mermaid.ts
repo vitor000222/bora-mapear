@@ -270,10 +270,15 @@ export function importarMermaid(codigo: string, nomeProcesso = 'Processo importa
   }
 }
 
-/** Decide pelo conteúdo: XML é BPMN; "flowchart"/"graph" é Mermaid. */
-export function detectarFormato(conteudo: string): 'bpmn' | 'mermaid' | null {
-  const t = conteudo.trimStart();
+/** Decide pelo conteúdo: XML é BPMN; "flowchart"/"graph" é Mermaid; cabeçalho com chave e tipo é CSV. */
+export function detectarFormato(conteudo: string): 'bpmn' | 'mermaid' | 'csv' | null {
+  const t = conteudo.replace(/^﻿/, '').trimStart();
   if (t.startsWith('<')) return 'bpmn';
   if (/^(?:%%.*\n\s*)*(flowchart|graph)\b/i.test(t)) return 'mermaid';
+  const colunas = (t.split(/\r?\n/)[0] ?? '')
+    .toLowerCase()
+    .split(/[;,\t]/)
+    .map((c) => c.trim().replace(/^"|"$/g, ''));
+  if (colunas.includes('chave') && colunas.includes('tipo')) return 'csv';
   return null;
 }

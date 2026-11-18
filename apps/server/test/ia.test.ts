@@ -1,20 +1,15 @@
-import { test, beforeEach, afterEach } from 'node:test';
+import { test, beforeEach, afterEach, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { criarApp } from '../src/app.ts';
-import { RepositorioSqlite } from '../src/sqlite.ts';
+import type { Repositorio } from '../src/repositorio.ts';
+import { BANCOS } from './bancos.ts';
 import { Cofre } from '../src/segredo.ts';
 import { Executor } from '../src/execucoes.ts';
 import { limparLegenda } from '../src/fontes.ts';
 import { exemplo, fetchFalso, respostaOpenAI } from '../../../packages/agentes/test/falso.ts';
 
-let repo: RepositorioSqlite;
+let repo: Repositorio;
 let executor: Executor;
-
-beforeEach(() => {
-  repo = new RepositorioSqlite(':memory:');
-  executor = new Executor(repo);
-});
-afterEach(() => repo.fechar());
 
 function montar(roteiro: Parameters<typeof fetchFalso>[0] = []) {
   const falso = fetchFalso(roteiro);
@@ -46,6 +41,16 @@ const TRANSCRICAO = 'WEBVTT\n\n00:00:05.000 --> 00:00:09.000\n<v Ana>Depois a lo
 function evidenciasDe(frases: string[]) {
   return respostaOpenAI({ evidencias: frases.map((citacao) => ({ citacao, sobre: 'etapa' })) });
 }
+
+for (const banco of BANCOS) describe(banco.nome, () => {
+beforeEach(async () => {
+  repo = await banco.criar();
+  executor = new Executor(repo);
+});
+afterEach(async () => {
+  await executor.aguardar();
+  await repo.fechar();
+});
 
 test('a chave fica cifrada no banco e nunca volta pela API', async () => {
   const { pedir } = montar();
@@ -247,4 +252,6 @@ test('estilo: guarda, valida e o Visual aprende das cores salvas em todos os map
   assert.match(enviado, /Pintou/);
   assert.equal((await pedir('PUT', '/api/estilo', r.dados.estilo)).status, 200);
   assert.equal((await pedir('GET', '/api/estilo')).dados.regras.length, 1);
+});
+
 });

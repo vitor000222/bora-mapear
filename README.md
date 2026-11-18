@@ -4,7 +4,7 @@
 documento do processo; os agentes montam a matriz; o Bora Mapear desenha em BPMN, Mermaid ou React Flow.
 Você corrige o desenho, e a correção fica guardada.
 
-> Status: **fase 3 — o desenho e o código voltam para a matriz, e o estilo é aprendido**. Próximo: Postgres e exportações ([roadmap](docs/roadmap.md)).
+> Status: **fase 4 — Postgres, exportar em SVG/PNG/PDF, matriz em CSV e subprocessos**. Próximo: interface em inglês e modo nuvem ([roadmap](docs/roadmap.md)).
 
 ## A ideia
 
@@ -47,8 +47,23 @@ npm start          # http://127.0.0.1:3737
 |---|---|---|
 | `PORTA` | `3737` | porta do servidor |
 | `HOST` | `127.0.0.1` | troque para `0.0.0.0` para abrir na rede |
-| `BORA_DB` | `data/bora.db` | caminho do arquivo do banco |
+| `BORA_DB` | `data/bora.db` | caminho do arquivo do banco (SQLite) |
+| `DATABASE_URL` | (vazio) | `postgres://…`: usa o seu Postgres em vez do SQLite |
 | `BORA_SECRET` | (arquivo `data/segredo.key`) | chave-mestra que cifra as chaves de API |
+
+### Com Postgres
+
+O seu banco: `DATABASE_URL=postgres://usuario:senha@host:5432/bora npm start`. As tabelas são criadas na
+primeira vez.
+
+Ou tudo em contêiner, Postgres junto:
+
+```bash
+cp .env.example .env      # troque BORA_SECRET por um texto longo e aleatório
+docker compose up -d      # http://127.0.0.1:3737
+```
+
+Guarde a `BORA_SECRET`: sem ela, as chaves de API cadastradas não abrem mais.
 
 ### O que dá para fazer
 
@@ -61,6 +76,12 @@ npm start          # http://127.0.0.1:3737
 - **Mermaid**: ver o desenho e editar o código à mão, com prévia ao vivo.
 - **Salvar correções**: só o que você mudou na forma é guardado, por chave, e sobrevive às próximas versões da
   matriz. Cada gravação vira frases no **registro de correções** ("Moveu *Analisar crédito* 60 px para a direita").
+- **Exportar** o desenho em SVG, PNG ou PDF (vetorial, com texto selecionável), nas três linguagens.
+- **Matriz em planilha**: "Exportar CSV" abre no Excel e no Google Planilhas; edite lá e traga de volta com
+  "Importar CSV". O que voltou passa pelo portão e só vira versão quando você salvar.
+- **Subprocessos**: numa etapa do tipo subprocesso, "Criar mapeamento filho" abre um mapeamento novo para
+  detalhá-la (ou ligue a um que já existe). No desenho, duplo clique na etapa abre o filho; no filho, uma
+  faixa mostra de qual processo ele faz parte.
 
 ## Agentes de IA, com a sua chave
 
@@ -92,8 +113,8 @@ servidor direto para o provedor.
 
 ## Ida e volta
 
-- **Importar** (na lista): BPMN 2.0 de qualquer ferramenta (Camunda, bpmn.io, Bizagi) e fluxograma Mermaid entram
-  direto, sem IA. BPMN exportado pelo próprio Bora Mapear volta com as posições do desenho. Outro formato (PlantUML,
+- **Importar** (na lista): BPMN 2.0 de qualquer ferramenta (Camunda, bpmn.io, Bizagi), fluxograma Mermaid e a
+  matriz em CSV entram direto, sem IA. BPMN exportado pelo próprio Bora Mapear volta com as posições do desenho. Outro formato (PlantUML,
   lista de passos, tabela) passa pelo agente **Conversor**.
 - **Do desenho para a matriz:** renomeou, criou ou apagou etapa no bpmn-js? Ao salvar, o app mostra o que mudou e
   oferece salvar como versão nova, revisar na Matriz ou guardar só a forma.
@@ -148,9 +169,11 @@ packages/core/        núcleo: matriz, portão, layout, renderizadores, correç�
   src/validar.ts      o portão
   src/layout.ts       layout automático em raias e roteador de setas
   src/correcoes.ts    aplicar, extrair, comparar e descrever correções
-  src/renderizadores/ bpmn.ts · mermaid.ts · reactflow.ts
-packages/agentes/     Leitor, Mapeador, Revisor e Editor; clientes OpenAI-compatível e Anthropic
-apps/server/          API (Hono) sobre SQLite: mapeamentos, versões, visões, fontes, evidências, execuções
+  src/importar-*.ts   BPMN e Mermaid → matriz
+  src/csv.ts          matriz ↔ CSV
+  src/renderizadores/ bpmn.ts · mermaid.ts · reactflow.ts · svg.ts
+packages/agentes/     Leitor, Mapeador, Revisor, Editor, Conversor e Visual; clientes OpenAI-compatível e Anthropic
+apps/server/          API (Hono) sobre SQLite ou Postgres: mapeamentos, versões, visões, fontes, evidências, execuções
 apps/web/             interface (Vite + React): lista, matriz, bpmn-js, React Flow, Mermaid, IA, configurações
 scripts/dev.ts        sobe API e interface juntas
 scripts/llm-falso.ts  provedor falso para testar os agentes sem chave

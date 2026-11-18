@@ -47,13 +47,17 @@ Ficou para depois: transcrever áudio e vídeo, OCR de PDF escaneado, e cancelar
 
 Ficou para depois: estilo de espaçamento e de ordem das raias, e posições aprendidas (hoje o estilo é só de cor).
 
-## Fase 4 — Para usar de verdade
+## Fase 4 — Para usar de verdade ✅
 
-- [ ] Postgres via `DATABASE_URL` + `docker compose`
-- [ ] Exportar PNG, SVG e PDF
-- [ ] Importar e exportar a matriz em CSV / planilha
-- [ ] Subprocesso que abre o mapeamento filho
-- [ ] Interface em inglês
+- [x] Postgres via `DATABASE_URL` (driver `pg`), com os testes da API rodando em SQLite e em Postgres (PGlite)
+- [x] `Dockerfile` e `docker compose` com Postgres
+- [x] Exportar SVG, PNG e PDF (vetorial) nas três linguagens
+- [x] Importar e exportar a matriz em CSV, que abre no Excel e no Google Planilhas
+- [x] Subprocesso que abre o mapeamento filho: criar o filho pela matriz, ligar a um que já existe, duplo clique no desenho para abrir, faixa "Subprocesso de" no filho
+
+Ficou para depois: o `docker compose` ainda não foi rodado de ponta a ponta (o Postgres em si é coberto pela
+suíte sobre PGlite); importar XLSX direto, sem passar por CSV; e a **interface em inglês**, que vira uma rodada
+própria (extrair os textos para um dicionário antes de traduzir).
 
 ## Fase 5 — Na nuvem
 

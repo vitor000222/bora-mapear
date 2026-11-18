@@ -1,0 +1,35 @@
+# Bora Mapear com Postgres. Uso:
+#   cp .env.example .env   (e troque BORA_SECRET)
+#   docker compose up -d   → http://localhost:3737
+services:
+  banco:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: bora
+      POSTGRES_USER: bora
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bora}
+    volumes:
+      - banco:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bora -d bora"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    depends_on:
+      banco:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://bora:${POSTGRES_PASSWORD:-bora}@banco:5432/bora
+      BORA_SECRET: ${BORA_SECRET:?Defina BORA_SECRET no arquivo .env}
+    ports:
+      # Só nesta máquina: o modo local não tem login. Para abrir na rede, tire o 127.0.0.1.
+      - "127.0.0.1:${PORTA:-3737}:3737"
+    volumes:
+      - dados:/app/data
+
+volumes:
+  banco:
+  dados:

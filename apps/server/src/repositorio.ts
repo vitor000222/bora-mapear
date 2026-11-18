@@ -170,5 +170,5 @@ export interface Repositorio {
   /** Execuções que estavam rodando quando o servidor caiu. */
   marcarInterrompidas(): Promise<number>;
 
-  fechar(): void;
+  fechar(): void | Promise<void>;
 }

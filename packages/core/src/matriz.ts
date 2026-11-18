@@ -91,6 +91,7 @@ export const EtapaSchema = z.object({
   evidencias: z.array(z.string()).optional().describe('Chaves das evidências que sustentam a linha (EV-001).'),
   confianca: z.number().min(0).max(1).optional().describe('Autoavaliação do agente, de 0 a 1.'),
   revisarHumano: z.boolean().optional().describe('true quando a linha pede revisão humana.'),
+  subprocesso: z.string().optional().describe('Id do mapeamento que detalha esta etapa (só no tipo subprocesso).'),
 });
 
 export const RaiaSchema = z.object({

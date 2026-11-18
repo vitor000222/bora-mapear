@@ -1,6 +1,9 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useMemo, useRef, useState } from 'react';
 import {
+  csvParaMatriz,
+  ErroImportacao,
   GRUPOS_TIPO,
+  matrizParaCsv,
   MatrizSchema,
   ROTULOS_TIPO,
   validarMatriz,
@@ -10,6 +13,8 @@ import {
   type Saida,
   type TipoEtapa,
 } from '@bora-mapear/core';
+import { baixar, type ResumoMapeamento } from '../api.ts';
+import { useAvisos } from '../avisos.tsx';
 
 interface Props {
   matriz: Matriz;
@@ -18,6 +23,11 @@ interface Props {
   aoMudar: (m: Matriz) => void;
   aoDescartar: () => void;
   aoSalvar: (m: Matriz, mensagem: string) => Promise<void>;
+  /** Para ligar subprocessos: o próprio mapeamento, os outros e os filhos já ligados. */
+  idMapeamento: string;
+  mapeamentos: ResumoMapeamento[];
+  filhos: Record<string, { id: string; nome: string } | null>;
+  aoCriarFilho: (chave: string) => Promise<void>;
 }
 
 /** "E04: Sim, E10: Não" ⇄ [{ para: 'E04', rotulo: 'Sim' }, …] */
@@ -77,7 +87,9 @@ function validarAoVivo(m: Matriz): { formato: string[]; problemas: Problema[] } 
   return { formato: [], problemas: validarMatriz(r.data).problemas };
 }
 
-export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescartar, aoSalvar }: Props) {
+export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescartar, aoSalvar, idMapeamento, mapeamentos, filhos, aoCriarFilho }: Props) {
+  const avisar = useAvisos();
+  const arquivoCsv = useRef<HTMLInputElement>(null);
   const [abertas, setAbertas] = useState<Set<string>>(new Set());
   const [mensagem, setMensagem] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -161,6 +173,30 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
           onChange={(e) => setMensagem(e.target.value)}
           disabled={!sujo}
           aria-label="Mensagem da versão"
+        />
+        <button className="botao" onClick={() => baixar(`${m.processo.id}.csv`, matrizParaCsv(m), 'text/csv;charset=utf-8')} title="Abre no Excel e no Google Sheets">
+          Exportar CSV
+        </button>
+        <button className="botao" onClick={() => arquivoCsv.current?.click()} title="Substitui a matriz pela da planilha, como rascunho">
+          Importar CSV
+        </button>
+        <input
+          ref={arquivoCsv}
+          type="file"
+          accept=".csv,.tsv,.txt"
+          hidden
+          onChange={async (ev) => {
+            const arquivo = ev.target.files?.[0];
+            ev.target.value = '';
+            if (!arquivo) return;
+            try {
+              const r = csvParaMatriz(await arquivo.text(), m.processo.nome);
+              aoMudar({ ...r.matriz, processo: m.processo });
+              avisar(`Planilha lida: ${r.matriz.etapas.length} etapas. Revise e salve a versão.`, r.avisos.length ? 'info' : 'sucesso', r.avisos);
+            } catch (e) {
+              avisar(e instanceof ErroImportacao ? e.message : `Não deu para ler a planilha: ${e instanceof Error ? e.message : String(e)}`, 'erro');
+            }
+          }}
         />
         <button className="botao" onClick={aoDescartar} disabled={!sujo || salvando}>
           Descartar
@@ -320,6 +356,16 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                             <td />
                             <td colSpan={7}>
                               <Detalhes etapa={e} aoMudar={(campos) => atualizar(i, campos)} />
+                              {e.tipo === 'subprocesso' && (
+                                <VinculoSubprocesso
+                                  etapa={e}
+                                  sujo={sujo}
+                                  filho={filhos[e.chave]}
+                                  opcoes={mapeamentos.filter((x) => x.id !== idMapeamento)}
+                                  aoLigar={(id) => atualizar(i, { subprocesso: id || undefined })}
+                                  aoCriar={() => aoCriarFilho(e.chave)}
+                                />
+                              )}
                             </td>
                           </tr>
                         )}
@@ -477,6 +523,62 @@ function Detalhes({ etapa: e, aoMudar }: { etapa: Etapa; aoMudar: (campos: Parti
         <input type="checkbox" checked={e.revisarHumano ?? false} onChange={(ev) => aoMudar({ revisarHumano: ev.target.checked || undefined })} />
         <span>Pede revisão humana</span>
       </label>
+    </div>
+  );
+}
+
+function VinculoSubprocesso({
+  etapa,
+  sujo,
+  filho,
+  opcoes,
+  aoLigar,
+  aoCriar,
+}: {
+  etapa: Etapa;
+  sujo: boolean;
+  filho: { id: string; nome: string } | null | undefined;
+  opcoes: ResumoMapeamento[];
+  aoLigar: (id: string) => void;
+  aoCriar: () => Promise<void>;
+}) {
+  const [criando, setCriando] = useState(false);
+  const ligado = etapa.subprocesso ? (filho ?? opcoes.find((o) => o.id === etapa.subprocesso) ?? null) : null;
+  return (
+    <div className="vinculo-subprocesso">
+      <strong className="pequeno">Mapeamento filho</strong>
+      {etapa.subprocesso && ligado && (
+        <span>
+          Detalhado em{' '}
+          <a href={`#/m/${ligado.id}`} className="link-forte">
+            {ligado.nome}
+          </a>
+          . No desenho, duplo clique na etapa abre o filho.
+        </span>
+      )}
+      {etapa.subprocesso && !ligado && <span className="texto-aviso">O mapeamento ligado não existe mais.</span>}
+      <select className="entrada" value={etapa.subprocesso ?? ''} onChange={(ev) => aoLigar(ev.target.value)} aria-label="Mapeamento filho">
+        <option value="">Nenhum</option>
+        {opcoes.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.nome}
+          </option>
+        ))}
+      </select>
+      {!etapa.subprocesso && (
+        <button
+          className="botao"
+          disabled={sujo || criando}
+          title={sujo ? 'Salve a versão antes: o filho é ligado numa versão nova da matriz' : 'Cria um mapeamento em branco para detalhar esta etapa'}
+          onClick={async () => {
+            setCriando(true);
+            await aoCriar();
+            setCriando(false);
+          }}
+        >
+          {criando ? 'Criando…' : 'Criar mapeamento filho'}
+        </button>
+      )}
     </div>
   );
 }

@@ -34,6 +34,10 @@ export interface MapeamentoCompleto {
   matriz: Matriz;
   validacao: ResultadoValidacao;
   visoes: Record<Linguagem, VisaoSalva>;
+  /** Mapeamentos que têm este como subprocesso. */
+  pais: Array<{ id: string; nome: string; chave: string; etapa: string }>;
+  /** Para cada etapa ligada a um mapeamento filho: o filho (null se ele foi apagado). */
+  filhos: Record<string, { id: string; nome: string } | null>;
 }
 
 export interface RegistroCorrecao {
@@ -98,6 +102,7 @@ export const api = {
   salvarCodigo: (id: string, linguagem: Linguagem, codigo: string | null) =>
     pedir<{ registro: RegistroCorrecao | null }>('PUT', `/api/mapeamentos/${id}/visoes/${linguagem}/codigo`, { codigo }),
   registro: (id: string) => pedir<RegistroCorrecao[]>('GET', `/api/mapeamentos/${id}/registro`),
+  criarSubprocesso: (id: string, chave: string) => pedir<{ filho: Mapeamento; versaoPai: number }>('POST', `/api/mapeamentos/${id}/subprocessos`, { chave }),
 };
 
 // ---------------------------------------------------------------- IA

@@ -18,7 +18,8 @@ import {
   type EstiloVisual,
   type Matriz,
 } from '@bora-mapear/core';
-import { baixar } from '../api.ts';
+import { exportarSvg } from '../exportar.ts';
+import { BotoesExportar } from './BotoesExportar.tsx';
 import { useAvisos } from '../avisos.tsx';
 
 interface Props {
@@ -31,6 +32,8 @@ interface Props {
   /** Mudança de conteúdo feita no desenho vira versão nova da matriz. */
   aoSalvarVersao: (m: Matriz, mensagem: string) => Promise<boolean>;
   aoRevisarProposta: (m: Matriz) => void;
+  /** Etapas de subprocesso ligadas a um mapeamento filho: duplo clique abre o filho. */
+  filhos: Record<string, { id: string; nome: string } | null>;
 }
 
 /** Conteúdo mudado no editor: a matriz lida do desenho e o que difere da atual. */
@@ -77,7 +80,7 @@ function enquadrar(canvas: Canvas) {
  * O desenho BPMN no editor do bpmn-js. Mover, redimensionar, pintar e redesenhar setas vira correção.
  * Mudança de conteúdo (renomear, criar, apagar) é detectada e avisada: ela vai na matriz.
  */
-export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersao, aoSalvar, aoSalvarVersao, aoRevisarProposta }: Props) {
+export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersao, aoSalvar, aoSalvarVersao, aoRevisarProposta, filhos }: Props) {
   const avisar = useAvisos();
   const recipiente = useRef<HTMLDivElement>(null);
   const modeler = useRef<Modeler | null>(null);
@@ -86,12 +89,21 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [mudanca, setMudanca] = useState<MudancaDeConteudo | null>(null);
+  const filhosAtuais = useRef(filhos);
+  filhosAtuais.current = filhos;
 
   useEffect(() => {
     const m = new Modeler({ container: recipiente.current!, additionalModules: [CorModule] });
     modeler.current = m;
     m.on('commandStack.changed', () => {
       if (!importando.current) setSujo(true);
+    });
+    // Duplo clique num subprocesso ligado abre o mapeamento filho (em vez de editar o nome).
+    m.on('element.dblclick', 1500, (evento: { element: { id: string } }) => {
+      const filho = filhosAtuais.current[evento.element.id];
+      if (!filho) return;
+      window.location.hash = `#/m/${filho.id}`;
+      return false;
     });
     return () => {
       m.destroy();
@@ -175,12 +187,6 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
     await aoSalvar(aplicarEstilo(matriz, estilo, correcoes), []);
   };
 
-  const baixarSvg = async () => {
-    const m = modeler.current;
-    if (!m) return;
-    const { svg } = await m.saveSVG();
-    baixar(`${nomeArquivo}.svg`, svg, 'image/svg+xml');
-  };
 
   const temCorrecao = Object.keys(correcoes.nos).length > 0 || Object.keys(correcoes.arestas).length > 0 || Object.keys(correcoes.raias).length > 0 || Boolean(correcoes.pool);
 
@@ -192,9 +198,7 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
         </span>
         <div className="barra-visao-acoes">
           {sujo && <span className="selo selo-aviso">Mudanças não salvas</span>}
-          <button className="botao" onClick={() => void baixarSvg()}>
-            Baixar SVG
-          </button>
+          <BotoesExportar aoExportar={async (f) => exportarSvg((await modeler.current!.saveSVG()).svg, f, nomeArquivo)} />
           <button className="botao" onClick={() => void aplicarMeuEstilo()} disabled={salvando} title="Pinta as etapas com as regras do seu estilo (Configurações)">
             Aplicar meu estilo
           </button>

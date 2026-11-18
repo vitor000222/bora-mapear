@@ -20,6 +20,7 @@ import {
   type NomeAgente,
 } from '@bora-mapear/agentes';
 import {
+  csvParaMatriz,
   detectarFormato,
   ErroImportacao,
   EstiloVisualSchema,
@@ -357,28 +358,28 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
       z.object({
         nome: z.string().trim().min(1, 'Dê um nome ao mapeamento.').max(200),
         conteudo: z.string().min(1, 'O conteúdo está vazio.').max(LIMITE_CONTEUDO),
-        formato: z.enum(['bpmn', 'mermaid', 'auto']).default('auto'),
+        formato: z.enum(['bpmn', 'mermaid', 'csv', 'auto']).default('auto'),
       }),
     );
     const formato = d.formato === 'auto' ? detectarFormato(d.conteudo) : d.formato;
     if (!formato) {
-      throw new ErroHttp(422, 'Não reconheci o formato: o importador lê BPMN 2.0 (XML) e fluxograma Mermaid. Para outro formato, use a conversão com IA.', {
+      throw new ErroHttp(422, 'Não reconheci o formato: o importador lê BPMN 2.0 (XML), fluxograma Mermaid e a matriz em CSV. Para outro formato, use a conversão com IA.', {
         podeUsarIa: true,
       });
     }
     let r: ResultadoImportacao;
     try {
-      r = formato === 'bpmn' ? await importarBpmn(d.conteudo) : importarMermaid(d.conteudo, d.nome);
+      r = formato === 'bpmn' ? await importarBpmn(d.conteudo) : formato === 'csv' ? csvParaMatriz(d.conteudo, d.nome) : importarMermaid(d.conteudo, d.nome);
     } catch (erro) {
-      if (erro instanceof ErroImportacao) throw new ErroHttp(422, erro.message, { podeUsarIa: true });
+      if (erro instanceof ErroImportacao) throw new ErroHttp(422, erro.message, { podeUsarIa: formato !== 'csv' });
       throw erro;
     }
     const matriz: Matriz = { ...r.matriz, processo: { ...r.matriz.processo, nome: d.nome, id: paraId(d.nome, 'processo') } };
     const mapeamento = await repo.criarMapeamento(
-      { nome: d.nome, descricao: '', linguagem: formato },
+      { nome: d.nome, descricao: '', linguagem: formato === 'mermaid' ? 'mermaid' : 'bpmn' },
       matriz,
       'pessoa',
-      `Importado de ${formato === 'bpmn' ? 'BPMN' : 'Mermaid'}.`,
+      `Importado de ${{ bpmn: 'BPMN', mermaid: 'Mermaid', csv: 'planilha (CSV)' }[formato]}.`,
     );
     if (r.correcoes) await repo.salvarCorrecoes(mapeamento.id, 'bpmn', r.correcoes);
     return c.json({ mapeamento, avisos: r.avisos, validacao: validarMatriz(matriz) }, 201);

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import { coresDoEstilo, renderizarMermaid, type EstiloVisual, type Matriz } from '@bora-mapear/core';
+import { exportarSvg } from '../exportar.ts';
+import { BotoesExportar } from './BotoesExportar.tsx';
 
-mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral', flowchart: { htmlLabels: true } });
+// Rótulos em texto SVG (não HTML): o PNG e o PDF saem com o texto.
+mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral', htmlLabels: false, flowchart: { htmlLabels: false } });
 let contador = 0;
 
 /** Desenha o código Mermaid (o editado à mão, se houver; senão o gerado da matriz). */
-export function DiagramaMermaid({ matriz, codigo, estilo }: { matriz: Matriz; codigo: string | null; estilo?: EstiloVisual }) {
+export function DiagramaMermaid({ matriz, codigo, estilo, exportarComo }: { matriz: Matriz; codigo: string | null; estilo?: EstiloVisual; exportarComo?: string }) {
   const fonte = useMemo(() => codigo ?? renderizarMermaid(matriz, estilo ? { cores: coresDoEstilo(matriz, estilo) } : {}), [matriz, codigo, estilo]);
   const alvo = useRef<HTMLDivElement>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -32,6 +35,17 @@ export function DiagramaMermaid({ matriz, codigo, estilo }: { matriz: Matriz; co
 
   return (
     <>
+      {exportarComo && !erro && (
+        <div className="barra-visao-acoes barra-mermaid">
+          <BotoesExportar
+            aoExportar={async (f) => {
+              const svg = alvo.current?.querySelector('svg');
+              if (!svg) throw new Error('o desenho ainda não está pronto');
+              await exportarSvg(svg.outerHTML, f, exportarComo);
+            }}
+          />
+        </div>
+      )}
       {erro && <p className="faixa-erro">O Mermaid não leu o código: {erro}</p>}
       <div ref={alvo} className="diagrama-mermaid" />
     </>

@@ -75,3 +75,19 @@ test('renderizar(): a mesma matriz em qualquer linguagem', () => {
   assert.match(renderizar('mermaid', m), /flowchart LR/);
   assert.equal(renderizar('reactflow', m).nodes.length, 4);
 });
+
+test('SVG puro: sem HTML dentro, com raias, etapas, setas, cores e texto escapado', async () => {
+  const { renderizarSvg, quebrarTexto, calcularLayout } = await import('../src/index.ts');
+  const m = exemplo();
+  m.etapas.find((e) => e.chave === 'E02')!.nome = 'Registrar <pedido> & "itens"';
+  const auto = calcularLayout(m);
+  const svg = renderizarSvg(m, { correcoes: { versao: 1, nos: { E07: { corFundo: '#fff3e0', corBorda: '#ef6c00' } }, arestas: {}, raias: {} } });
+  assert.ok(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"'));
+  assert.equal(/foreignObject/.test(svg), false);
+  assert.equal((svg.match(/<polyline /g) ?? []).length, 16);
+  assert.match(svg, />Logística</);
+  assert.match(svg, /fill="#fff3e0" stroke="#ef6c00"/);
+  assert.match(svg, /&lt;pedido&gt; &amp;/);
+  assert.match(svg, new RegExp(`viewBox="${auto.pool.x - 20} ${auto.pool.y - 20} `));
+  assert.deepEqual(quebrarTexto('Separar e embalar mercadoria', 16), ['Separar e', 'embalar', 'mercadoria']);
+});

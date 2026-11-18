@@ -11,6 +11,7 @@ import {
   validarMatriz,
   type Correcoes,
   type Linguagem,
+  type Matriz,
 } from '@bora-mapear/core';
 import type { Repositorio } from './repositorio.ts';
 import { MODELOS, matrizInicial } from './modelos.ts';
@@ -111,6 +112,23 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
     if (!m) throw new ErroHttp(404, 'Mapeamento não encontrado.');
     return m;
   };
+  /** Quem aponta para este mapeamento como subprocesso, e para quem as etapas dele apontam. */
+  const parentesco = async (id: string, matriz: Matriz) => {
+    const pais: Array<{ id: string; nome: string; chave: string; etapa: string }> = [];
+    for (const m of await repo.listarMapeamentos()) {
+      if (m.id === id) continue;
+      const v = await repo.versaoAtual(m.id);
+      for (const e of v?.matriz.etapas ?? []) if (e.subprocesso === id) pais.push({ id: m.id, nome: m.nome, chave: e.chave, etapa: e.nome });
+    }
+    const filhos: Record<string, { id: string; nome: string } | null> = {};
+    for (const e of matriz.etapas) {
+      if (!e.subprocesso) continue;
+      const f = await repo.obterMapeamento(e.subprocesso);
+      filhos[e.chave] = f ? { id: f.id, nome: f.nome } : null;
+    }
+    return { pais, filhos };
+  };
+
   const exigirLinguagem = (valor: string): Linguagem => {
     const r = Linguagem.safeParse(valor);
     if (!r.success) throw new ErroHttp(404, `Linguagem desconhecida: ${valor}. Use ${LINGUAGENS.join(', ')}.`);
@@ -137,7 +155,25 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
     for (const l of LINGUAGENS) visoes[l] = { correcoes: correcoesVazias(), codigo: null, atualizadoEm: null };
     for (const v of await repo.listarVisoes(id)) visoes[v.linguagem] = v;
     const { matriz, ...cabecalho } = versao;
-    return c.json({ mapeamento, versao: cabecalho, matriz, validacao: validarMatriz(matriz), visoes });
+    const { pais, filhos } = await parentesco(id, matriz);
+    return c.json({ mapeamento, versao: cabecalho, matriz, validacao: validarMatriz(matriz), visoes, pais, filhos });
+  });
+
+  /** Cria o mapeamento que detalha uma etapa de subprocesso e liga os dois (versão nova do pai). */
+  app.post('/api/mapeamentos/:id/subprocessos', async (c) => {
+    const id = c.req.param('id');
+    await exigirMapeamento(id);
+    const { chave } = await corpo(c, z.object({ chave: z.string().min(1) }));
+    const versao = (await repo.versaoAtual(id))!;
+    const etapa = versao.matriz.etapas.find((e) => e.chave === chave);
+    if (!etapa) throw new ErroHttp(404, `A etapa ${chave} não existe na versão atual.`);
+    if (etapa.tipo !== 'subprocesso') throw new ErroHttp(400, `A etapa ${chave} não é do tipo subprocesso. Mude o tipo na Matriz antes.`);
+    if (etapa.subprocesso && (await repo.obterMapeamento(etapa.subprocesso))) throw new ErroHttp(409, 'Esta etapa já tem um mapeamento filho.');
+    const nome = etapa.nome.trim() || `Subprocesso ${chave}`;
+    const filho = await repo.criarMapeamento({ nome, descricao: `Detalha a etapa ${chave} de "${versao.matriz.processo.nome}".`, linguagem: 'bpmn' }, matrizInicial('em-branco', nome), 'pessoa', 'Criado como subprocesso.');
+    const matriz = { ...versao.matriz, etapas: versao.matriz.etapas.map((e) => (e.chave === chave ? { ...e, subprocesso: filho.id } : e)) };
+    const nova = await repo.salvarVersao(id, matriz, 'pessoa', `Ligou "${nome}" (${chave}) ao mapeamento filho.`);
+    return c.json({ filho, versaoPai: nova.numero }, 201);
   });
 
   app.patch('/api/mapeamentos/:id', async (c) => {

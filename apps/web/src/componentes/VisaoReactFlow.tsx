@@ -13,6 +13,7 @@ import {
   useInternalNode,
   useNodes,
   useNodesState,
+  useReactFlow,
   type Edge,
   type EdgeProps,
   type InternalNode,
@@ -27,6 +28,7 @@ import {
   correcoesVazias,
   extrairCorrecoesDoReactFlow,
   renderizarReactFlow,
+  renderizarSvg,
   rotear,
   type Caixa,
   type Correcoes,
@@ -35,6 +37,8 @@ import {
   type TipoEtapa,
 } from '@bora-mapear/core';
 import { useAvisos } from '../avisos.tsx';
+import { exportarSvg, type FormatoImagem } from '../exportar.ts';
+import { BotoesExportar } from './BotoesExportar.tsx';
 
 interface Dados extends Record<string, unknown> {
   rotulo: string;
@@ -150,15 +154,41 @@ function ArestaRoteada({ id, source, target, label, markerEnd }: EdgeProps) {
 
 const TIPOS_DE_ARESTA = { roteada: ArestaRoteada };
 
+/**
+ * Exporta o desenho inteiro como está na tela (posições e cores ainda não salvas incluídas),
+ * pelo SVG puro do núcleo: PNG nítido e PDF vetorial. Fica dentro do ReactFlow para usar o hook.
+ */
+function ExportarReactFlow({ matriz }: { matriz: Matriz }) {
+  const { getNodes } = useReactFlow<No>();
+  const exportar = async (formato: FormatoImagem) => {
+    const nos = getNodes().map((n) => {
+      const salvo: Parameters<typeof extrairCorrecoesDoReactFlow>[0][number] = { id: n.id, position: n.position, data: n.data };
+      if (n.type) salvo.type = n.type;
+      if (n.width !== undefined) salvo.width = n.width;
+      if (n.height !== undefined) salvo.height = n.height;
+      return salvo;
+    });
+    const { correcoes } = extrairCorrecoesDoReactFlow(nos, matriz);
+    await exportarSvg(renderizarSvg(matriz, { correcoes }), formato, matriz.processo.id);
+  };
+  return (
+    <Panel position="top-left" className="paleta">
+      <BotoesExportar aoExportar={exportar} />
+    </Panel>
+  );
+}
+
 interface Props {
   matriz: Matriz;
   correcoes: Correcoes;
   estilo: EstiloVisual;
   aoSalvar: (correcoes: Correcoes) => Promise<void>;
+  /** Subprocessos ligados: duplo clique abre o mapeamento filho. */
+  filhos: Record<string, { id: string; nome: string } | null>;
 }
 
 /** O desenho no React Flow, nas mesmas coordenadas do BPMN. Arrastar e pintar vira correção. */
-export function VisaoReactFlow({ matriz, correcoes, estilo, aoSalvar }: Props) {
+export function VisaoReactFlow({ matriz, correcoes, estilo, aoSalvar, filhos }: Props) {
   const avisar = useAvisos();
   const inicial = useMemo(() => renderizarReactFlow(matriz, { correcoes }), [matriz, correcoes]);
   const [nodes, setNodes, aoMudarNos] = useNodesState<No>(inicial.nodes as No[]);
@@ -242,6 +272,10 @@ export function VisaoReactFlow({ matriz, correcoes, estilo, aoSalvar }: Props) {
           nodeTypes={TIPOS_DE_NO}
           edgeTypes={TIPOS_DE_ARESTA}
           onNodesChange={aoMudar}
+          onNodeDoubleClick={(_, no) => {
+            const filho = filhos[no.id];
+            if (filho) window.location.hash = `#/m/${filho.id}`;
+          }}
           onEdgesChange={aoMudarArestas}
           nodesConnectable={false}
           deleteKeyCode={null}
@@ -250,6 +284,7 @@ export function VisaoReactFlow({ matriz, correcoes, estilo, aoSalvar }: Props) {
           proOptions={{ hideAttribution: false }}
         >
           <Background gap={20} />
+          <ExportarReactFlow matriz={matriz} />
           <Controls showInteractive={false} />
           <MiniMap pannable zoomable nodeStrokeWidth={2} style={{ width: 160, height: 100 }} />
           {selecionados.length > 0 && (
