@@ -1,4 +1,5 @@
 import type { Matriz } from './matriz.ts';
+import type { Idioma } from './idioma.ts';
 import { calcularLayout, etapasUnicas, raiasDoDesenho, type Caixa, type Layout, type Ponto } from './layout.ts';
 import { fluxosDaMatriz, idDaRaia } from './ids.ts';
 
@@ -234,11 +235,55 @@ function direcao(d: number, positivo: string, negativo: string): string {
   return `${Math.abs(d)} px ${d > 0 ? positivo : negativo}`;
 }
 
+const FRASES = {
+  pt: {
+    direita: 'para a direita',
+    esquerda: 'para a esquerda',
+    baixo: 'para baixo',
+    cima: 'para cima',
+    e: ' e ',
+    moveu: (nome: string, partes: string) => `Moveu ${nome} ${partes}.`,
+    redimensionou: (nome: string, l: number, a: number) => `Redimensionou ${nome} para ${l}×${a}.`,
+    fundo: (cor: string) => `fundo ${cor}`,
+    borda: (cor: string) => `borda ${cor}`,
+    pintou: (nome: string, cores: string) => `Pintou ${nome}: ${cores}.`,
+    seta: (seta: string, n: number) => `Redesenhou a seta ${seta} com ${n} pontos.`,
+    alturaRaia: (nome: string, de: number, para: number) => `Mudou a altura da raia ${nome} de ${de} para ${para} px.`,
+    raia: (nome: string) => `Ajustou a raia ${nome}.`,
+    pool: 'Ajustou o contorno do processo.',
+    voltouNo: (nome: string) => `Voltou ${nome} ao automático.`,
+    voltouSeta: (id: string) => `Voltou a seta ${id} ao traçado automático.`,
+    voltouRaia: (nome: string) => `Voltou a raia ${nome} ao automático.`,
+    voltouPool: 'Voltou o contorno do processo ao automático.',
+  },
+  en: {
+    direita: 'to the right',
+    esquerda: 'to the left',
+    baixo: 'down',
+    cima: 'up',
+    e: ' and ',
+    moveu: (nome: string, partes: string) => `Moved ${nome} ${partes}.`,
+    redimensionou: (nome: string, l: number, a: number) => `Resized ${nome} to ${l}×${a}.`,
+    fundo: (cor: string) => `fill ${cor}`,
+    borda: (cor: string) => `border ${cor}`,
+    pintou: (nome: string, cores: string) => `Colored ${nome}: ${cores}.`,
+    seta: (seta: string, n: number) => `Redrew the flow ${seta} with ${n} points.`,
+    alturaRaia: (nome: string, de: number, para: number) => `Changed the height of lane ${nome} from ${de} to ${para} px.`,
+    raia: (nome: string) => `Adjusted lane ${nome}.`,
+    pool: 'Adjusted the process outline.',
+    voltouNo: (nome: string) => `Reset ${nome} to the automatic layout.`,
+    voltouSeta: (id: string) => `Reset the flow ${id} to the automatic route.`,
+    voltouRaia: (nome: string) => `Reset lane ${nome} to the automatic layout.`,
+    voltouPool: 'Reset the process outline to the automatic layout.',
+  },
+} satisfies Record<Idioma, unknown>;
+
 /**
  * As correções em frases: o registro que o usuário lê no histórico
  * e que o Agente Visual usa como exemplo do gosto dele.
  */
-export function descreverCorrecoes(m: Matriz, c: Correcoes): string[] {
+export function descreverCorrecoes(m: Matriz, c: Correcoes, idioma: Idioma = 'pt'): string[] {
+  const t = FRASES[idioma];
   const auto = calcularLayout(m);
   const nomes = new Map(etapasUnicas(m).map((e) => [e.chave, e.nome ? `"${e.nome}" (${e.chave})` : e.chave]));
   const nomesRaia = new Map(raiasDoDesenho(m).map((r) => [r.id, r.nome]));
@@ -251,32 +296,32 @@ export function descreverCorrecoes(m: Matriz, c: Correcoes): string[] {
       const partes: string[] = [];
       const dx = n.x - base.x;
       const dy = n.y - base.y;
-      if (dx) partes.push(direcao(dx, 'para a direita', 'para a esquerda'));
-      if (dy) partes.push(direcao(dy, 'para baixo', 'para cima'));
-      if (partes.length) frases.push(`Moveu ${nome} ${partes.join(' e ')}.`);
+      if (dx) partes.push(direcao(dx, t.direita, t.esquerda));
+      if (dy) partes.push(direcao(dy, t.baixo, t.cima));
+      if (partes.length) frases.push(t.moveu(nome, partes.join(t.e)));
     }
-    if (n.largura !== undefined && n.altura !== undefined) frases.push(`Redimensionou ${nome} para ${n.largura}×${n.altura}.`);
+    if (n.largura !== undefined && n.altura !== undefined) frases.push(t.redimensionou(nome, n.largura, n.altura));
     if (n.corFundo || n.corBorda) {
-      const cores = [n.corFundo && `fundo ${n.corFundo}`, n.corBorda && `borda ${n.corBorda}`].filter(Boolean).join(' e ');
-      frases.push(`Pintou ${nome}: ${cores}.`);
+      const cores = [n.corFundo && t.fundo(n.corFundo), n.corBorda && t.borda(n.corBorda)].filter(Boolean).join(t.e);
+      frases.push(t.pintou(nome, cores));
     }
   }
   const fluxos = new Map(fluxosDaMatriz(m).map((f) => [f.id, f]));
   for (const [id, a] of Object.entries(c.arestas)) {
     const f = fluxos.get(id);
     const seta = f ? `${f.de} → ${f.para}${f.rotulo ? ` ("${f.rotulo}")` : ''}` : id;
-    frases.push(`Redesenhou a seta ${seta} com ${a.pontos.length} pontos.`);
+    frases.push(t.seta(seta, a.pontos.length));
   }
   for (const [id, caixa] of Object.entries(c.raias)) {
     const base = auto.raias.find((r) => r.id === id);
     const nome = `"${nomesRaia.get(id) ?? id}"`;
     if (base && caixa.altura !== undefined && caixa.altura !== base.altura) {
-      frases.push(`Mudou a altura da raia ${nome} de ${base.altura} para ${caixa.altura} px.`);
+      frases.push(t.alturaRaia(nome, base.altura, caixa.altura));
     } else {
-      frases.push(`Ajustou a raia ${nome}.`);
+      frases.push(t.raia(nome));
     }
   }
-  if (c.pool) frases.push('Ajustou o contorno do processo.');
+  if (c.pool) frases.push(t.pool);
   return frases;
 }
 
@@ -317,14 +362,15 @@ export function diferencaCorrecoes(antes: Correcoes, depois: Correcoes): Diferen
 }
 
 /** As frases do registro de uma gravação: o que o usuário fez desde a última vez. */
-export function descreverMudanca(m: Matriz, antes: Correcoes, depois: Correcoes): string[] {
+export function descreverMudanca(m: Matriz, antes: Correcoes, depois: Correcoes, idioma: Idioma = 'pt'): string[] {
+  const t = FRASES[idioma];
   const { mudou, desfeitas } = diferencaCorrecoes(antes, depois);
   const nomes = new Map(etapasUnicas(m).map((e) => [e.chave, e.nome ? `"${e.nome}" (${e.chave})` : e.chave]));
   const nomesRaia = new Map(raiasDoDesenho(m).map((r) => [r.id, `"${r.nome}"`]));
-  const frases = descreverCorrecoes(m, mudou);
-  for (const k of desfeitas.nos) frases.push(`Voltou ${nomes.get(k) ?? k} ao automático.`);
-  for (const k of desfeitas.arestas) frases.push(`Voltou a seta ${k} ao traçado automático.`);
-  for (const k of desfeitas.raias) frases.push(`Voltou a raia ${nomesRaia.get(k) ?? k} ao automático.`);
-  if (desfeitas.pool) frases.push('Voltou o contorno do processo ao automático.');
+  const frases = descreverCorrecoes(m, mudou, idioma);
+  for (const k of desfeitas.nos) frases.push(t.voltouNo(nomes.get(k) ?? k));
+  for (const k of desfeitas.arestas) frases.push(t.voltouSeta(k));
+  for (const k of desfeitas.raias) frases.push(t.voltouRaia(nomesRaia.get(k) ?? k));
+  if (desfeitas.pool) frases.push(t.voltouPool);
   return frases;
 }

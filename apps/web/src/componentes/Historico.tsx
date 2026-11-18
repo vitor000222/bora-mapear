@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Matriz } from '@bora-mapear/core';
 import { api, formatarData, NOMES_LINGUAGEM, type CabecalhoVersao, type RegistroCorrecao } from '../api.ts';
 import { useAvisos } from '../avisos.tsx';
+import { useTextos } from '../i18n/index.tsx';
 
 interface Props {
   id: string;
@@ -13,6 +14,7 @@ interface Props {
 
 export function Historico({ id, versaoAtual, atualizar, aoRestaurar }: Props) {
   const avisar = useAvisos();
+  const t = useTextos().mapeamento.historico;
   const [versoes, setVersoes] = useState<CabecalhoVersao[] | null>(null);
   const [registro, setRegistro] = useState<RegistroCorrecao[] | null>(null);
 
@@ -23,7 +25,7 @@ export function Historico({ id, versaoAtual, atualizar, aoRestaurar }: Props) {
   }, [id, atualizar, versaoAtual, avisar]);
 
   const restaurar = async (numero: number) => {
-    if (!window.confirm(`Criar a versão ${versaoAtual + 1} com a matriz da versão ${numero}? As versões entre elas continuam no histórico.`)) return;
+    if (!window.confirm(t.restaurarConfirmar(versaoAtual + 1, numero))) return;
     try {
       const v = await api.versao(id, numero);
       await aoRestaurar(v.matriz, numero);
@@ -35,22 +37,22 @@ export function Historico({ id, versaoAtual, atualizar, aoRestaurar }: Props) {
   return (
     <div className="historico">
       <div className="cartao secao">
-        <h2>Versões da matriz</h2>
-        {!versoes && <p className="suave">Carregando…</p>}
+        <h2>{t.versoes}</h2>
+        {!versoes && <p className="suave">{t.carregando}</p>}
         <ol className="lista-historico">
           {versoes?.map((v) => (
             <li key={v.numero}>
               <div className="historico-cabecalho">
                 <strong>v{v.numero}</strong>
-                {v.numero === versaoAtual && <span className="selo selo-ok">atual</span>}
+                {v.numero === versaoAtual && <span className="selo selo-ok">{t.atual}</span>}
                 <span className="suave pequeno">
-                  {formatarData(v.criadoEm)} · {v.autor === 'pessoa' ? 'você' : v.autor} · {v.etapas} etapas
+                  {formatarData(v.criadoEm)} · {v.autor === 'pessoa' ? t.voce : v.autor} · {t.etapas(v.etapas)}
                 </span>
               </div>
               {v.mensagem && <p>{v.mensagem}</p>}
               {v.numero !== versaoAtual && (
                 <button className="botao botao-fantasma" onClick={() => void restaurar(v.numero)}>
-                  Restaurar esta versão
+                  {t.restaurar}
                 </button>
               )}
             </li>
@@ -58,16 +60,16 @@ export function Historico({ id, versaoAtual, atualizar, aoRestaurar }: Props) {
         </ol>
       </div>
       <div className="cartao secao">
-        <h2>Registro de correções</h2>
-        <p className="suave pequeno">O que foi corrigido no desenho, em frases. É daqui que o agente visual vai aprender o seu jeito.</p>
-        {registro?.length === 0 && <p className="suave">Nenhuma correção salva ainda.</p>}
+        <h2>{t.registro}</h2>
+        <p className="suave pequeno">{t.registroDica}</p>
+        {registro?.length === 0 && <p className="suave">{t.nenhumaCorrecao}</p>}
         <ol className="lista-historico">
           {registro?.map((r) => (
             <li key={r.id}>
               <div className="historico-cabecalho">
                 <span className={`selo selo-${r.linguagem}`}>{NOMES_LINGUAGEM[r.linguagem]}</span>
                 <span className="suave pequeno">
-                  {formatarData(r.criadoEm)} · na v{r.versao}
+                  {formatarData(r.criadoEm)} · {t.naVersao(r.versao)}
                 </span>
               </div>
               <ul>

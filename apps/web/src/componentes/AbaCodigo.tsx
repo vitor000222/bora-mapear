@@ -14,6 +14,7 @@ import {
 import { baixar, type VisaoSalva } from '../api.ts';
 import { useAvisos } from '../avisos.tsx';
 import { DiagramaMermaid } from './DiagramaMermaid.tsx';
+import { useIdioma, useTextos } from '../i18n/index.tsx';
 
 interface Props {
   linguagem: Linguagem;
@@ -28,6 +29,7 @@ interface Props {
 
 /** O código por trás do desenho. BPMN e React Flow só leitura; Mermaid editável e de volta para a matriz. */
 export function AbaCodigo({ linguagem, matriz, visoes, estilo, aoSalvarCodigo, aoTrazerParaMatriz, aoConverterComIa }: Props) {
+  const { idioma } = useIdioma();
   if (linguagem === 'mermaid') {
     return (
       <CodigoMermaid
@@ -42,31 +44,32 @@ export function AbaCodigo({ linguagem, matriz, visoes, estilo, aoSalvarCodigo, a
   }
   const [conteudo, extensao, tipo] =
     linguagem === 'bpmn'
-      ? [renderizarBpmn(matriz, { correcoes: visoes.bpmn.correcoes }), 'bpmn', 'application/xml']
+      ? [renderizarBpmn(matriz, { correcoes: visoes.bpmn.correcoes, idioma }), 'bpmn', 'application/xml']
       : [JSON.stringify(renderizarReactFlow(matriz, { correcoes: visoes.reactflow.correcoes }), null, 2), 'reactflow.json', 'application/json'];
   return <CodigoLeitura conteudo={conteudo} nomeArquivo={`${matriz.processo.id}.${extensao}`} tipo={tipo} />;
 }
 
 function CodigoLeitura({ conteudo, nomeArquivo, tipo }: { conteudo: string; nomeArquivo: string; tipo: string }) {
   const avisar = useAvisos();
+  const t = useTextos().mapeamento.codigo;
   return (
     <div className="visao">
       <div className="barra-visao">
-        <span className="suave pequeno">Gerado da matriz com as correções salvas. Para mudar, edite a matriz ou o desenho.</span>
+        <span className="suave pequeno">{t.geradoDaMatriz}</span>
         <div className="barra-visao-acoes">
           <button
             className="botao"
             onClick={() =>
               void navigator.clipboard.writeText(conteudo).then(
-                () => avisar('Código copiado.', 'sucesso'),
-                () => avisar('O navegador não deixou copiar.', 'erro'),
+                () => avisar(t.copiado, 'sucesso'),
+                () => avisar(t.naoCopiou, 'erro'),
               )
             }
           >
-            Copiar
+            {t.copiar}
           </button>
           <button className="botao botao-primario" onClick={() => baixar(nomeArquivo, conteudo, tipo)}>
-            Baixar {nomeArquivo}
+            {t.baixar(nomeArquivo)}
           </button>
         </div>
       </div>
@@ -86,7 +89,10 @@ interface PropsMermaid {
 
 function CodigoMermaid({ matriz, salvo, estilo, aoSalvar, aoTrazerParaMatriz, aoConverterComIa }: PropsMermaid) {
   const avisar = useAvisos();
-  const gerado = useMemo(() => renderizarMermaid(matriz, { cores: coresDoEstilo(matriz, estilo) }), [matriz, estilo]);
+  const { idioma } = useIdioma();
+  const t = useTextos().mapeamento.codigo;
+  // O idioma só muda o comentário do topo; fora das dependências para não apagar o que a pessoa está editando.
+  const gerado = useMemo(() => renderizarMermaid(matriz, { cores: coresDoEstilo(matriz, estilo), idioma }), [matriz, estilo]);
   const base = salvo ?? gerado;
   const [texto, setTexto] = useState(base);
   const [ultimo, setUltimo] = useState(base);
@@ -99,15 +105,15 @@ function CodigoMermaid({ matriz, salvo, estilo, aoSalvar, aoTrazerParaMatriz, ao
 
   const trazer = () => {
     try {
-      const r = importarMermaid(texto, matriz.processo.nome);
+      const r = importarMermaid(texto, matriz.processo.nome, { idioma });
       const nova: Matriz = { ...r.matriz, processo: matriz.processo };
-      const mudancas = compararMatrizes(matriz, nova);
+      const mudancas = compararMatrizes(matriz, nova, { idioma });
       if (!mudancas.length) {
-        avisar('O código diz o mesmo que a matriz: nada a trazer.', 'info');
+        avisar(t.nadaATrazer, 'info');
         return;
       }
       setFalhaLeitura(null);
-      if (r.avisos.length) avisar('Lido com avisos:', 'info', r.avisos);
+      if (r.avisos.length) avisar(t.lidoComAvisos, 'info', r.avisos);
       aoTrazerParaMatriz(nova);
     } catch (e) {
       if (e instanceof ErroImportacao) setFalhaLeitura(e.message);
@@ -119,33 +125,33 @@ function CodigoMermaid({ matriz, salvo, estilo, aoSalvar, aoTrazerParaMatriz, ao
     <div className="visao">
       <div className="barra-visao">
         <span className="suave pequeno">
-          {salvo === null ? 'Código gerado da matriz.' : 'Código editado à mão: não acompanha mudanças na matriz.'} Mudou o fluxo no código? Traga para a matriz.
+          {salvo === null ? t.mermaidGerado : t.mermaidEditado} {t.trazerDica}
         </span>
         <div className="barra-visao-acoes">
           <button className="botao" onClick={() => baixar(`${matriz.processo.id}.mmd`, texto, 'text/plain')}>
-            Baixar .mmd
+            {t.baixarMmd}
           </button>
-          <button className="botao" onClick={trazer} title="Lê o código e abre a matriz resultante na aba Matriz, para revisar e salvar">
-            Trazer para a matriz
+          <button className="botao" onClick={trazer} title={t.trazerTitulo}>
+            {t.trazer}
           </button>
           <button className="botao" onClick={() => void aoSalvar(null)} disabled={salvo === null}>
-            Voltar ao gerado
+            {t.voltarAoGerado}
           </button>
           <button className="botao botao-primario" onClick={() => void aoSalvar(texto)} disabled={!sujo}>
-            Salvar código
+            {t.salvar}
           </button>
         </div>
       </div>
       {falhaLeitura && (
         <div className="faixa-erro">
-          <p>Não deu para ler o código: {falhaLeitura}</p>
+          <p>{t.naoLeu(falhaLeitura)}</p>
           <button className="botao" onClick={() => aoConverterComIa(texto)}>
-            Converter com IA
+            {t.converterComIa}
           </button>
         </div>
       )}
       <div className="codigo-lado-a-lado">
-        <textarea className="cartao codigo editor-codigo" value={texto} onChange={(e) => setTexto(e.target.value)} spellCheck={false} aria-label="Código Mermaid" />
+        <textarea className="cartao codigo editor-codigo" value={texto} onChange={(e) => setTexto(e.target.value)} spellCheck={false} aria-label={t.codigoMermaid} />
         <div className="cartao painel-mermaid">
           <DiagramaMermaid matriz={matriz} codigo={texto} />
         </div>

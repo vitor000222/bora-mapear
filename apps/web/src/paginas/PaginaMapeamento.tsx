@@ -9,18 +9,15 @@ import { DiagramaMermaid } from '../componentes/DiagramaMermaid.tsx';
 import { AbaCodigo } from '../componentes/AbaCodigo.tsx';
 import { Historico } from '../componentes/Historico.tsx';
 import { AbaIa } from '../componentes/AbaIa.tsx';
+import { useTextos } from '../i18n/index.tsx';
 
 type Aba = 'desenho' | 'matriz' | 'ia' | 'codigo' | 'historico';
-const ABAS: Array<{ id: Aba; nome: string }> = [
-  { id: 'desenho', nome: 'Desenho' },
-  { id: 'matriz', nome: 'Matriz' },
-  { id: 'ia', nome: 'IA' },
-  { id: 'codigo', nome: 'Código' },
-  { id: 'historico', nome: 'Histórico' },
-];
+// O nome de cada aba vem de `mapeamento.abas` no dicionário.
+const ABAS: Array<{ id: Aba }> = [{ id: 'desenho' }, { id: 'matriz' }, { id: 'ia' }, { id: 'codigo' }, { id: 'historico' }];
 
 export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: string }) {
   const avisar = useAvisos();
+  const t = useTextos().mapeamento;
   const [dados, setDados] = useState<MapeamentoCompleto | null>(null);
   const [erro, setErro] = useState<{ status: number; texto: string } | null>(null);
   const [aba, setAba] = useState<Aba>(ABAS.some((a) => a.id === abaInicial) ? (abaInicial as Aba) : 'desenho');
@@ -59,28 +56,28 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
     return (
       <section className="pagina">
         <a href="#/" className="voltar">
-          ← Mapeamentos
+          {t.pagina.voltar}
         </a>
         <div className="cartao estado-erro">
-          <strong>{erro.status === 404 ? 'Este mapeamento não existe mais.' : 'Não deu para abrir o mapeamento.'}</strong>
+          <strong>{erro.status === 404 ? t.pagina.naoExiste : t.pagina.naoAbriu}</strong>
           <p>{erro.texto}</p>
           {erro.status !== 404 && (
             <button className="botao" onClick={() => void recarregar()}>
-              Tentar de novo
+              {t.pagina.tentarDeNovo}
             </button>
           )}
         </div>
       </section>
     );
   }
-  if (!dados) return <section className="pagina"><div className="cartao estado-carregando">Carregando…</div></section>;
+  if (!dados) return <section className="pagina"><div className="cartao estado-carregando">{t.pagina.carregando}</div></section>;
 
   const { mapeamento, matriz, validacao, visoes, versao, pais, filhos } = dados;
 
   const criarFilho = async (chave: string) => {
     try {
       const r = await api.criarSubprocesso(id, chave);
-      avisar(`Mapeamento filho "${r.filho.nome}" criado e ligado (versão ${r.versaoPai}).`, 'sucesso');
+      avisar(t.avisos.filhoCriado(r.filho.nome, r.versaoPai), 'sucesso');
       setHistoricoVersao((n) => n + 1);
       setMapeamentos(await api.listar());
       await recarregar();
@@ -113,9 +110,9 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
   const salvarCorrecoes = async (l: Linguagem, correcoes: Correcoes, alertas: string[] = []) => {
     try {
       const { registro } = await api.salvarCorrecoes(id, l, correcoes);
-      if (registro) avisar('Correções salvas.', 'sucesso', registro.frases);
-      else avisar('Nada mudou desde a última gravação.', 'info');
-      if (alertas.length) avisar('Mudanças de conteúdo feitas no desenho não foram salvas. Faça-as na aba Matriz:', 'erro', alertas);
+      if (registro) avisar(t.avisos.correcoesSalvas, 'sucesso', registro.frases);
+      else avisar(t.avisos.nadaMudou, 'info');
+      if (alertas.length) avisar(t.avisos.conteudoNoDesenho, 'erro', alertas);
       setHistoricoVersao((n) => n + 1);
       await recarregar();
     } catch (e) {
@@ -126,7 +123,7 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
   const salvarCodigo = async (codigo: string | null) => {
     try {
       await api.salvarCodigo(id, 'mermaid', codigo);
-      avisar(codigo === null ? 'Código voltou ao gerado pela matriz.' : 'Código Mermaid salvo.', 'sucesso');
+      avisar(codigo === null ? t.avisos.codigoVoltou : t.avisos.codigoSalvo, 'sucesso');
       setHistoricoVersao((n) => n + 1);
       await recarregar();
     } catch (e) {
@@ -139,9 +136,9 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
       const r = await api.salvarVersao(id, m, mensagem);
       setRascunho(null);
       avisar(
-        `Versão ${r.versao.numero} salva.`,
+        t.avisos.versaoSalva(r.versao.numero),
         r.validacao.ok ? 'sucesso' : 'erro',
-        r.validacao.ok ? undefined : ['A matriz foi salva como rascunho: o portão ainda acusa erros.'],
+        r.validacao.ok ? undefined : [t.avisos.salvaComoRascunho],
       );
       setHistoricoVersao((n) => n + 1);
       await recarregar();
@@ -153,17 +150,17 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
   };
 
   const revisarProposta = (m: Matriz, origem: string) => {
-    if (rascunho && !window.confirm('A matriz já tem mudanças não salvas. Trocar pela proposta?')) return;
+    if (rascunho && !window.confirm(t.avisos.trocarPelaProposta)) return;
     setRascunho(m);
     setAba('matriz');
-    avisar(`${origem} aberta na Matriz como rascunho. Revise e salve a versão.`, 'info');
+    avisar(t.avisos.abertaComoRascunho(origem), 'info');
   };
 
   const converterComIa = async (conteudo: string) => {
     try {
       await apiIa.converter(id, conteudo);
       setAba('ia');
-      avisar('O Conversor está trabalhando. A proposta aparece aqui na aba IA.', 'info');
+      avisar(t.avisos.conversorTrabalhando, 'info');
     } catch (e) {
       avisar(e instanceof Error ? e.message : String(e), 'erro');
     }
@@ -172,15 +169,16 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
   return (
     <section className="pagina pagina-larga">
       <a href="#/" className="voltar">
-        ← Mapeamentos
+        {t.pagina.voltar}
       </a>
       {pais.length > 0 && (
         <p className="faixa-info pequeno">
-          Subprocesso de{' '}
+          {t.pagina.subprocessoDe}{' '}
           {pais.map((p, i) => (
             <span key={`${p.id}-${p.chave}`}>
               {i > 0 && ', '}
-              <a href={`#/m/${p.id}`}>{p.nome}</a> (etapa {p.chave}, “{p.etapa}”)
+              <a href={`#/m/${p.id}`}>{p.nome}</a>
+              {t.pagina.etapaDoPai(p.chave, p.etapa)}
             </span>
           ))}
           .
@@ -192,18 +190,16 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
             className="titulo-editavel"
             defaultValue={mapeamento.nome}
             key={mapeamento.nome}
-            aria-label="Nome do mapeamento"
+            aria-label={t.pagina.nomeDoMapeamento}
             onBlur={(e) => void renomear(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
           />
           <div className="mapa-meta">
-            <span className="suave">
-              v{versao.numero} · {matriz.etapas.length} etapas · {matriz.raias.length} raias
-            </span>
+            <span className="suave">{t.pagina.resumo(versao.numero, matriz.etapas.length, matriz.raias.length)}</span>
             <SeloPortao validacao={validacao} aoClicar={() => setAba('matriz')} />
           </div>
         </div>
-        <div className="segmentado" role="radiogroup" aria-label="Linguagem do desenho">
+        <div className="segmentado" role="radiogroup" aria-label={t.pagina.linguagemDoDesenho}>
           {LINGUAGENS.map((l) => (
             <button
               key={l}
@@ -221,8 +217,8 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
       <nav className="abas" role="tablist">
         {ABAS.map((a) => (
           <button key={a.id} role="tab" aria-selected={aba === a.id} onClick={() => setAba(a.id)}>
-            {a.nome}
-            {a.id === 'matriz' && rascunho && <span className="ponto" title="Mudanças não salvas" />}
+            {t.abas[a.id]}
+            {a.id === 'matriz' && rascunho && <span className="ponto" title={t.pagina.naoSalvas} />}
           </button>
         ))}
       </nav>
@@ -238,7 +234,7 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
               proximaVersao={versao.numero + 1}
               aoSalvar={(c, alertas) => salvarCorrecoes('bpmn', c, alertas)}
               aoSalvarVersao={salvarVersao}
-              aoRevisarProposta={(m) => revisarProposta(m, 'A matriz do desenho')}
+              aoRevisarProposta={(m) => revisarProposta(m, t.origens.desenho)}
               filhos={filhos}
             />
           )}
@@ -248,12 +244,12 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
           {linguagem === 'mermaid' && (
             <div className="cartao painel-mermaid">
               {visoes.mermaid.codigo !== null && (
-                <p className="faixa-info">Este desenho usa o código Mermaid editado à mão. Ele não acompanha mudanças na matriz.</p>
+                <p className="faixa-info">{t.pagina.mermaidEditado}</p>
               )}
               <DiagramaMermaid matriz={matriz} codigo={visoes.mermaid.codigo} estilo={estilo} exportarComo={matriz.processo.id} />
             </div>
           )}
-          {rascunho && <p className="faixa-info">O desenho mostra a versão salva. A matriz tem mudanças ainda não salvas.</p>}
+          {rascunho && <p className="faixa-info">{t.pagina.desenhoMostraSalva}</p>}
         </div>
       )}
 
@@ -279,7 +275,7 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
           <AbaIa
             id={id}
             versaoAtual={versao.numero}
-            aoRevisarProposta={(m) => revisarProposta(m, 'A proposta do agente')}
+            aoRevisarProposta={(m) => revisarProposta(m, t.origens.agente)}
             aoAplicar={async () => {
               setHistoricoVersao((n) => n + 1);
               await recarregar();
@@ -296,7 +292,7 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
             visoes={visoes}
             estilo={estilo}
             aoSalvarCodigo={salvarCodigo}
-            aoTrazerParaMatriz={(m) => revisarProposta(m, 'A matriz lida do código')}
+            aoTrazerParaMatriz={(m) => revisarProposta(m, t.origens.codigo)}
             aoConverterComIa={(conteudo) => void converterComIa(conteudo)}
           />
         </div>
@@ -308,7 +304,7 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
             id={id}
             versaoAtual={versao.numero}
             atualizar={historicoVersao}
-            aoRestaurar={async (m, numero) => void (await salvarVersao(m, `Restaurada da versão ${numero}.`))}
+            aoRestaurar={async (m, numero) => void (await salvarVersao(m, t.historico.restaurada(numero)))}
           />
         </div>
       )}
@@ -317,15 +313,16 @@ export function PaginaMapeamento({ id, abaInicial }: { id: string; abaInicial?: 
 }
 
 function SeloPortao({ validacao, aoClicar }: { validacao: ResultadoValidacao; aoClicar: () => void }) {
+  const t = useTextos().mapeamento.selo;
   const erros = validacao.problemas.filter((p) => p.severidade === 'erro').length;
   const avisos = validacao.problemas.length - erros;
   const [classe, texto] = !validacao.ok
-    ? ['selo-erro', `Portão: ${erros} ${erros === 1 ? 'erro' : 'erros'}`]
+    ? ['selo-erro', t.erros(erros)]
     : avisos
-      ? ['selo-aviso', `Portão: aprovada, ${avisos} ${avisos === 1 ? 'aviso' : 'avisos'}`]
-      : ['selo-ok', 'Portão: aprovada'];
+      ? ['selo-aviso', t.aprovadaComAvisos(avisos)]
+      : ['selo-ok', t.aprovada];
   return (
-    <button className={`selo ${classe}`} onClick={aoClicar} title="Ver na aba Matriz">
+    <button className={`selo ${classe}`} onClick={aoClicar} title={t.titulo}>
       {texto}
     </button>
   );

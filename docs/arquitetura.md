@@ -158,6 +158,22 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
 | Exportar | SVG do próprio desenho; PNG pelo canvas; PDF por jsPDF + svg2pdf.js | sem servidor de renderização |
 | Testes | `node:test` | sem dependência |
 
+## Idiomas
+
+Português e inglês, escolhidos no seletor do topo (guardado no navegador; na primeira vez, vale o idioma do
+navegador). Três camadas, cada uma com o seu dicionário:
+
+- **Interface** (`apps/web/src/i18n/`): uma área por tela em `textos/`, com `pt` como fonte e `en: typeof pt`,
+  então faltar uma chave em inglês é erro de compilação. Componentes usam `useTextos()`; o que roda fora do
+  React (api.ts, exportar.ts) ou em tratador registrado uma vez (bpmn-js) usa `textos()`.
+- **Núcleo**: as funções que escrevem para a pessoa ler recebem `idioma` (`validarMatriz`, `compararMatrizes`,
+  `descreverMudanca`, importadores, CSV, `rotulosTipo`, os renderizadores BPMN e Mermaid). Padrão: português.
+- **Servidor**: a interface manda `Accept-Language`; o servidor responde erros, portão, avisos e frases do
+  registro nesse idioma, e cria o exemplo e o mapeamento em branco nele. Os agentes recebem o idioma pelo
+  cliente do modelo e escrevem a saída nele; as citações das evidências continuam literais.
+
+O que é conteúdo do usuário (nomes, matriz, mensagens de versão já gravadas) fica no idioma em que foi escrito.
+
 ## Licença
 
 O Bora Mapear é AGPL-3.0: quem oferecer uma versão modificada como serviço precisa abrir o código dela. Por

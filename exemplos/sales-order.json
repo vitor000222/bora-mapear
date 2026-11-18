@@ -1,0 +1,96 @@
+{
+  "versaoSchema": 1,
+  "processo": {
+    "id": "sales-order",
+    "nome": "Sales order",
+    "descricao": "From the customer's order to dispatch, with stock and credit checks. Fictional example."
+  },
+  "raias": [
+    { "id": "cliente", "nome": "Customer" },
+    { "id": "vendas", "nome": "Sales" },
+    { "id": "financeiro", "nome": "Finance" },
+    { "id": "logistica", "nome": "Logistics" }
+  ],
+  "etapas": [
+    {
+      "chave": "E01", "tipo": "inicio", "nome": "Customer sends order", "raia": "cliente",
+      "sistema": "E-mail",
+      "proximos": [{ "para": "E02" }],
+      "evidencias": ["EV-001"]
+    },
+    {
+      "chave": "E02", "tipo": "tarefa_usuario", "nome": "Enter order in the ERP", "raia": "vendas",
+      "descricao": "The sales rep types the order into the ERP from the customer's e-mail.",
+      "sistema": "ERP", "entrada": "Customer e-mail", "saida": "Order being entered",
+      "proximos": [{ "para": "E03" }],
+      "evidencias": ["EV-002"]
+    },
+    {
+      "chave": "E03", "tipo": "gateway_exclusivo", "nome": "In stock?", "raia": "vendas",
+      "proximos": [{ "para": "E04", "rotulo": "Yes" }, { "para": "E10", "rotulo": "No" }],
+      "evidencias": ["EV-003"]
+    },
+    {
+      "chave": "E04", "tipo": "tarefa_usuario", "nome": "Check customer credit", "raia": "financeiro",
+      "sistema": "ERP", "regra": "Orders above US$ 10,000 go to the finance manager.",
+      "proximos": [{ "para": "E05" }],
+      "evidencias": ["EV-004", "EV-005"]
+    },
+    {
+      "chave": "E05", "tipo": "gateway_exclusivo", "nome": "Credit approved?", "raia": "financeiro",
+      "proximos": [{ "para": "E06", "rotulo": "Yes" }, { "para": "E11", "rotulo": "No" }],
+      "evidencias": ["EV-005"]
+    },
+    {
+      "chave": "E06", "tipo": "gateway_paralelo", "nome": "", "raia": "financeiro",
+      "proximos": [{ "para": "E07" }, { "para": "E08" }]
+    },
+    {
+      "chave": "E07", "tipo": "tarefa_manual", "nome": "Pick and pack goods", "raia": "logistica",
+      "descricao": "Picking from a printed list, no scanner.",
+      "proximos": [{ "para": "E09" }],
+      "evidencias": ["EV-006"], "confianca": 0.7, "revisarHumano": true
+    },
+    {
+      "chave": "E08", "tipo": "tarefa_usuario", "nome": "Issue invoice", "raia": "financeiro",
+      "sistema": "ERP",
+      "proximos": [{ "para": "E09" }],
+      "evidencias": ["EV-007"]
+    },
+    {
+      "chave": "E09", "tipo": "gateway_paralelo", "nome": "", "raia": "logistica",
+      "proximos": [{ "para": "E12" }]
+    },
+    {
+      "chave": "E10", "tipo": "tarefa_envio", "nome": "Tell customer the lead time", "raia": "vendas",
+      "sistema": "WhatsApp",
+      "proximos": [{ "para": "E14" }],
+      "evidencias": ["EV-003"]
+    },
+    {
+      "chave": "E14", "tipo": "evento_timer", "nome": "Wait for restock (7 days)", "raia": "vendas",
+      "proximos": [{ "para": "E03" }],
+      "evidencias": ["EV-003"]
+    },
+    {
+      "chave": "E11", "tipo": "tarefa_envio", "nome": "Notify credit refusal", "raia": "financeiro",
+      "sistema": "E-mail",
+      "proximos": [{ "para": "E15" }],
+      "evidencias": ["EV-005"]
+    },
+    {
+      "chave": "E15", "tipo": "fim", "nome": "Order refused", "raia": "financeiro",
+      "proximos": []
+    },
+    {
+      "chave": "E12", "tipo": "tarefa_envio", "nome": "Dispatch and notify customer", "raia": "logistica",
+      "sistema": "E-mail",
+      "proximos": [{ "para": "E13" }],
+      "evidencias": ["EV-008"]
+    },
+    {
+      "chave": "E13", "tipo": "fim", "nome": "Order dispatched", "raia": "logistica",
+      "proximos": []
+    }
+  ]
+}

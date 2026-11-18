@@ -39,6 +39,7 @@ import {
 import { useAvisos } from '../avisos.tsx';
 import { exportarSvg, type FormatoImagem } from '../exportar.ts';
 import { BotoesExportar } from './BotoesExportar.tsx';
+import { useTextos, type Textos } from '../i18n/index.tsx';
 
 interface Dados extends Record<string, unknown> {
   rotulo: string;
@@ -48,13 +49,14 @@ interface Dados extends Record<string, unknown> {
 }
 type No = Node<Dados>;
 
-const PALETA = [
-  { nome: 'Azul', fundo: '#e3f2fd', borda: '#1565c0' },
-  { nome: 'Verde', fundo: '#e8f5e9', borda: '#2e7d32' },
-  { nome: 'Amarelo', fundo: '#fff8e1', borda: '#f9a825' },
-  { nome: 'Laranja', fundo: '#fff3e0', borda: '#ef6c00' },
-  { nome: 'Vermelho', fundo: '#ffebee', borda: '#c62828' },
-  { nome: 'Roxo', fundo: '#f3e5f5', borda: '#6a1b9a' },
+// O nome de cada cor vem dos textos (desenho.reactflow.cores).
+const PALETA: { cor: keyof Textos['desenho']['reactflow']['cores']; fundo: string; borda: string }[] = [
+  { cor: 'azul', fundo: '#e3f2fd', borda: '#1565c0' },
+  { cor: 'verde', fundo: '#e8f5e9', borda: '#2e7d32' },
+  { cor: 'amarelo', fundo: '#fff8e1', borda: '#f9a825' },
+  { cor: 'laranja', fundo: '#fff3e0', borda: '#ef6c00' },
+  { cor: 'vermelho', fundo: '#ffebee', borda: '#c62828' },
+  { cor: 'roxo', fundo: '#f3e5f5', borda: '#6a1b9a' },
 ];
 
 const cor = (d: Dados): CSSProperties => ({
@@ -190,6 +192,7 @@ interface Props {
 /** O desenho no React Flow, nas mesmas coordenadas do BPMN. Arrastar e pintar vira correção. */
 export function VisaoReactFlow({ matriz, correcoes, estilo, aoSalvar, filhos }: Props) {
   const avisar = useAvisos();
+  const t = useTextos().desenho;
   const inicial = useMemo(() => renderizarReactFlow(matriz, { correcoes }), [matriz, correcoes]);
   const [nodes, setNodes, aoMudarNos] = useNodesState<No>(inicial.nodes as No[]);
   const [edges, setEdges, aoMudarArestas] = useEdgesState<Edge>(inicial.edges as Edge[]);
@@ -243,25 +246,25 @@ export function VisaoReactFlow({ matriz, correcoes, estilo, aoSalvar, filhos }: 
   return (
     <div className="visao">
       <div className="barra-visao">
-        <span className="suave pequeno">Arraste as etapas; selecione (Shift para várias) e escolha uma cor.</span>
+        <span className="suave pequeno">{t.reactflow.dica}</span>
         <div className="barra-visao-acoes">
-          {sujo && <span className="selo selo-aviso">Correções não salvas</span>}
+          {sujo && <span className="selo selo-aviso">{t.reactflow.naoSalvas}</span>}
           <button
             className="botao"
             disabled={salvando}
-            title="Pinta as etapas com as regras do seu estilo (Configurações)"
+            title={t.acoes.aplicarEstiloTitulo}
             onClick={() => {
-              if (!estilo.regras.length) avisar('Você ainda não tem estilo. Defina ou aprenda um em Configurações.', 'info');
+              if (!estilo.regras.length) avisar(t.acoes.semEstilo, 'info');
               else void aoSalvar(aplicarEstilo(matriz, estilo, correcoes));
             }}
           >
-            Aplicar meu estilo
+            {t.acoes.aplicarEstilo}
           </button>
-          <button className="botao" onClick={() => void aoSalvar(correcoesVazias())} disabled={salvando || !temCorrecao} title="Apaga as correções desta visão">
-            Voltar ao automático
+          <button className="botao" onClick={() => void aoSalvar(correcoesVazias())} disabled={salvando || !temCorrecao} title={t.reactflow.voltarAutomaticoTitulo}>
+            {t.acoes.voltarAutomatico}
           </button>
           <button className="botao botao-primario" onClick={() => void salvar()} disabled={!sujo || salvando}>
-            {salvando ? 'Salvando…' : 'Salvar correções'}
+            {salvando ? t.acoes.salvando : t.reactflow.salvarCorrecoes}
           </button>
         </div>
       </div>
@@ -289,19 +292,19 @@ export function VisaoReactFlow({ matriz, correcoes, estilo, aoSalvar, filhos }: 
           <MiniMap pannable zoomable nodeStrokeWidth={2} style={{ width: 160, height: 100 }} />
           {selecionados.length > 0 && (
             <Panel position="top-right" className="paleta">
-              <span className="pequeno">Cor de {selecionados.length === 1 ? '1 etapa' : `${selecionados.length} etapas`}</span>
+              <span className="pequeno">{t.reactflow.corDe(selecionados.length)}</span>
               <div className="paleta-cores">
                 {PALETA.map((c) => (
                   <button
-                    key={c.nome}
+                    key={c.cor}
                     className="amostra"
                     style={{ background: c.fundo, borderColor: c.borda }}
-                    title={c.nome}
-                    aria-label={`Pintar de ${c.nome.toLowerCase()}`}
+                    title={t.reactflow.cores[c.cor]}
+                    aria-label={t.reactflow.pintarDe(t.reactflow.cores[c.cor])}
                     onClick={() => pintar(c.fundo, c.borda)}
                   />
                 ))}
-                <button className="amostra amostra-sem" title="Sem cor" aria-label="Tirar a cor" onClick={() => pintar()}>
+                <button className="amostra amostra-sem" title={t.reactflow.semCor} aria-label={t.reactflow.tirarCor} onClick={() => pintar()}>
                   ⌀
                 </button>
               </div>

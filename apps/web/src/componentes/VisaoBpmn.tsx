@@ -21,6 +21,7 @@ import {
 import { exportarSvg } from '../exportar.ts';
 import { BotoesExportar } from './BotoesExportar.tsx';
 import { useAvisos } from '../avisos.tsx';
+import { useIdioma, useTextos } from '../i18n/index.tsx';
 
 interface Props {
   matriz: Matriz;
@@ -82,6 +83,10 @@ function enquadrar(canvas: Canvas) {
  */
 export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersao, aoSalvar, aoSalvarVersao, aoRevisarProposta, filhos }: Props) {
   const avisar = useAvisos();
+  // Só no que roda a cada render ou clique. Os tratadores do bpmn-js (registrados uma vez) não usam texto;
+  // se passarem a usar, leiam com textos() na hora, não este `t`.
+  const t = useTextos().desenho;
+  const { idioma } = useIdioma();
   const recipiente = useRef<HTMLDivElement>(null);
   const modeler = useRef<Modeler | null>(null);
   const importando = useRef(false);
@@ -117,7 +122,9 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
     let cancelado = false;
     importando.current = true;
     setMudanca(null);
-    m.importXML(renderizarBpmn(matriz, { correcoes }))
+    // O idioma (rótulos da documentação) não entra nas dependências: trocar de idioma não deve reimportar
+    // o desenho e perder o que ainda não foi salvo.
+    m.importXML(renderizarBpmn(matriz, { correcoes, idioma }))
       .then(({ warnings }) => {
         if (cancelado) return;
         if (warnings.length) console.warn('bpmn-js:', warnings);
@@ -142,16 +149,16 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
     setSalvando(true);
     try {
       const xml = await xmlAtual();
-      const lida = await importarBpmn(xml);
+      const lida = await importarBpmn(xml, { idioma });
       const nova = reconciliarComOriginal(matriz, lida.matriz);
-      const frases = compararMatrizes(matriz, nova).filter((f) => !/^Detalhes de/.test(f));
+      const frases = compararMatrizes(matriz, nova, { idioma, detalhes: false });
       if (frases.length) {
-        setMudanca({ xml, matriz: nova, frases, erros: validarMatriz(nova).problemas.filter((p) => p.severidade === 'erro').map((p) => p.mensagem) });
+        setMudanca({ xml, matriz: nova, frases, erros: validarMatriz(nova, { idioma }).problemas.filter((p) => p.severidade === 'erro').map((p) => p.mensagem) });
         return;
       }
       await aoSalvar(extrairCorrecoesDoBpmn(xml, matriz).correcoes, []);
     } catch (e) {
-      avisar(`Não deu para ler o desenho: ${e instanceof Error ? e.message : String(e)}`, 'erro');
+      avisar(t.bpmn.naoLeu(e instanceof Error ? e.message : String(e)), 'erro');
     } finally {
       setSalvando(false);
     }
@@ -162,7 +169,7 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
     if (!mudanca) return;
     setSalvando(true);
     try {
-      const ok = await aoSalvarVersao(mudanca.matriz, 'Editada no desenho BPMN.');
+      const ok = await aoSalvarVersao(mudanca.matriz, t.bpmn.mensagemVersao);
       if (ok) await aoSalvar(extrairCorrecoesDoBpmn(mudanca.xml, mudanca.matriz).correcoes, []);
       setMudanca(null);
     } finally {
@@ -174,14 +181,14 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
     if (!mudanca) return;
     const { correcoes: novas, desconhecidos, ausentes } = extrairCorrecoesDoBpmn(mudanca.xml, matriz);
     const ignorado = [...mudanca.frases];
-    if (desconhecidos.length || ausentes.length) ignorado.push('Elementos criados ou apagados no desenho voltam ao que a matriz diz.');
+    if (desconhecidos.length || ausentes.length) ignorado.push(t.bpmn.elementosIgnorados);
     setMudanca(null);
     await aoSalvar(novas, ignorado);
   };
 
   const aplicarMeuEstilo = async () => {
     if (!estilo.regras.length) {
-      avisar('Você ainda não tem estilo. Defina ou aprenda um em Configurações.', 'info');
+      avisar(t.acoes.semEstilo, 'info');
       return;
     }
     await aoSalvar(aplicarEstilo(matriz, estilo, correcoes), []);
@@ -193,26 +200,24 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
   return (
     <div className="visao">
       <div className="barra-visao">
-        <span className="suave pequeno">
-          Arraste, redimensione e pinte (clique no elemento → ícone de cor). Renomear, criar ou apagar aqui também vale: ao salvar, o app mostra o que mudou na matriz.
-        </span>
+        <span className="suave pequeno">{t.bpmn.dica}</span>
         <div className="barra-visao-acoes">
-          {sujo && <span className="selo selo-aviso">Mudanças não salvas</span>}
+          {sujo && <span className="selo selo-aviso">{t.bpmn.naoSalvas}</span>}
           <BotoesExportar aoExportar={async (f) => exportarSvg((await modeler.current!.saveSVG()).svg, f, nomeArquivo)} />
-          <button className="botao" onClick={() => void aplicarMeuEstilo()} disabled={salvando} title="Pinta as etapas com as regras do seu estilo (Configurações)">
-            Aplicar meu estilo
+          <button className="botao" onClick={() => void aplicarMeuEstilo()} disabled={salvando} title={t.acoes.aplicarEstiloTitulo}>
+            {t.acoes.aplicarEstilo}
           </button>
-          <button className="botao" onClick={() => void aoSalvar(correcoesVazias(), [])} disabled={salvando || !temCorrecao} title="Apaga as correções desta visão e volta ao layout automático">
-            Voltar ao automático
+          <button className="botao" onClick={() => void aoSalvar(correcoesVazias(), [])} disabled={salvando || !temCorrecao} title={t.bpmn.voltarAutomaticoTitulo}>
+            {t.acoes.voltarAutomatico}
           </button>
           <button className="botao botao-primario" onClick={() => void salvar()} disabled={!sujo || salvando}>
-            {salvando ? 'Salvando…' : 'Salvar'}
+            {salvando ? t.acoes.salvando : t.bpmn.salvar}
           </button>
         </div>
       </div>
       {mudanca && (
         <div className="cartao secao painel-mudanca" role="alertdialog" aria-labelledby="titulo-mudanca">
-          <strong id="titulo-mudanca">O desenho mudou o conteúdo da matriz</strong>
+          <strong id="titulo-mudanca">{t.bpmn.mudanca.titulo}</strong>
           <ul className="pequeno">
             {mudanca.frases.map((f) => (
               <li key={f}>{f}</li>
@@ -220,7 +225,7 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
           </ul>
           {mudanca.erros.length > 0 && (
             <div className="pequeno texto-aviso">
-              O portão vai acusar {mudanca.erros.length} {mudanca.erros.length === 1 ? 'erro' : 'erros'}. Dá para salvar e corrigir na Matriz.
+              {t.bpmn.mudanca.portao(mudanca.erros.length)}
               <ul>
                 {mudanca.erros.slice(0, 3).map((e) => (
                   <li key={e}>{e}</li>
@@ -230,7 +235,7 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
           )}
           <div className="barra-visao-acoes">
             <button className="botao botao-primario" onClick={() => void salvarComoVersao()} disabled={salvando}>
-              Salvar como versão {proximaVersao}
+              {t.bpmn.mudanca.salvarComoVersao(proximaVersao)}
             </button>
             <button
               className="botao"
@@ -239,18 +244,18 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
                 setMudanca(null);
               }}
             >
-              Revisar na Matriz
+              {t.bpmn.mudanca.revisar}
             </button>
-            <button className="botao" onClick={() => void soForma()} disabled={salvando} title="Guarda só posições e cores; o conteúdo volta ao da matriz">
-              Salvar só a forma
+            <button className="botao" onClick={() => void soForma()} disabled={salvando} title={t.bpmn.mudanca.soFormaTitulo}>
+              {t.bpmn.mudanca.soForma}
             </button>
             <button className="botao botao-fantasma" onClick={() => setMudanca(null)}>
-              Continuar editando
+              {t.bpmn.mudanca.continuar}
             </button>
           </div>
         </div>
       )}
-      {erro && <p className="faixa-erro">O bpmn-js não abriu o desenho: {erro}</p>}
+      {erro && <p className="faixa-erro">{t.bpmn.naoAbriu(erro)}</p>}
       <div ref={recipiente} className="canvas canvas-bpmn" />
     </div>
   );

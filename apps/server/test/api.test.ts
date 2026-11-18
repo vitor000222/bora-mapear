@@ -8,11 +8,11 @@ import { BANCOS } from './bancos.ts';
 let repo: Repositorio;
 let app: ReturnType<typeof criarApp>;
 
-async function pedir(metodo: string, caminho: string, corpo?: unknown) {
-  const init: RequestInit = { method: metodo };
+async function pedir(metodo: string, caminho: string, corpo?: unknown, idioma?: 'en' | 'pt-BR') {
+  const init: RequestInit = { method: metodo, headers: idioma ? { 'Accept-Language': idioma } : {} };
   if (corpo !== undefined) {
     init.body = JSON.stringify(corpo);
-    init.headers = { 'Content-Type': 'application/json' };
+    init.headers = { ...(idioma ? { 'Accept-Language': idioma } : {}), 'Content-Type': 'application/json' };
   }
   const r = await app.request(caminho, init);
   const texto = await r.text();
@@ -155,6 +155,46 @@ test('importar planilha CSV', async () => {
   assert.equal(ruim.status, 422);
   assert.match(ruim.dados.erro, /nome, raia/);
   assert.equal(ruim.dados.detalhes.podeUsarIa, false);
+});
+
+test('em inglês: exemplo, portão, erros e registro seguem o Accept-Language', async () => {
+  const criado = await pedir('POST', '/api/mapeamentos', { nome: 'Sales order', modelo: 'exemplo' }, 'en');
+  assert.equal(criado.status, 201);
+  const id = criado.dados.id as string;
+  const { dados } = await pedir('GET', `/api/mapeamentos/${id}`, undefined, 'en');
+  assert.equal(dados.matriz.raias[0].nome, 'Customer');
+  assert.equal(dados.versao.mensagem, 'Created from the example.');
+
+  // Portão em inglês na resposta da versão salva.
+  const quebrada = structuredClone(dados.matriz) as Matriz;
+  quebrada.etapas.find((e) => e.chave === 'E02')!.proximos = [];
+  const salva = await pedir('POST', `/api/mapeamentos/${id}/versoes`, { matriz: quebrada }, 'en');
+  assert.match(salva.dados.validacao.problemas.find((p: { codigo: string }) => p.codigo === 'BECO_SEM_SAIDA').mensagem, /has no outgoing flow/);
+  // A mesma matriz, sem cabeçalho, em português.
+  const pt = await pedir('GET', `/api/mapeamentos/${id}`);
+  assert.match(pt.dados.validacao.problemas.find((p: { codigo: string }) => p.codigo === 'BECO_SEM_SAIDA').mensagem, /não tem saída/);
+
+  const faltando = await pedir('GET', '/api/mapeamentos/nao-existe', undefined, 'en');
+  assert.equal(faltando.status, 404);
+  assert.equal(faltando.dados.erro, 'Process map not found.');
+  assert.equal((await pedir('GET', '/api/mapeamentos/nao-existe')).dados.erro, 'Mapeamento não encontrado.');
+
+  const correcoes = { versao: 1, nos: { E02: { corFundo: '#ffcc00' } }, arestas: {}, raias: {} };
+  const r = await pedir('PUT', `/api/mapeamentos/${id}/visoes/bpmn/correcoes`, { correcoes }, 'en');
+  assert.match(r.dados.registro.frases[0], /^Colored /);
+
+  const branco = await pedir('POST', '/api/mapeamentos', { nome: 'Blank' }, 'en');
+  const aberto = await pedir('GET', `/api/mapeamentos/${branco.dados.id}`, undefined, 'en');
+  assert.deepEqual(aberto.dados.matriz.etapas.map((e: { nome: string }) => e.nome), ['Start', 'First task', 'End']);
+});
+
+test('em inglês: importar CSV avisa em inglês', async () => {
+  const csv = ['key,type,name,lane,next', 'E1,Start,Begin,Sales,E2', 'E2,Unknown thing,Do it,Sales,E3', 'E3,End,Done,Sales,'].join('\n');
+  const r = await pedir('POST', '/api/mapeamentos/importar', { nome: 'From sheet', conteudo: csv }, 'en');
+  assert.equal(r.status, 201, JSON.stringify(r.dados));
+  assert.deepEqual(r.dados.avisos, ['Row 3: unknown type "Unknown thing"; it became "Task".']);
+  const versoes = await pedir('GET', `/api/mapeamentos/${r.dados.mapeamento.id}/versoes`);
+  assert.equal(versoes.dados[0].mensagem, 'Imported from a spreadsheet (CSV).');
 });
 
 });

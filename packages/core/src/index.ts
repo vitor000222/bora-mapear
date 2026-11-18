@@ -1,3 +1,4 @@
+export * from './idioma.ts';
 export * from './matriz.ts';
 export * from './ids.ts';
 export * from './validar.ts';

@@ -1,4 +1,8 @@
 import type { Correcoes, EstiloVisual, Linguagem, Matriz, RegraVisual, ResultadoValidacao } from '@bora-mapear/core';
+import { idiomaAtual, localDoIdioma, textos } from './i18n/index.tsx';
+
+/** O servidor responde mensagens e frases no idioma da interface. */
+const cabecalhoIdioma = (): Record<string, string> => ({ 'Accept-Language': idiomaAtual() === 'en' ? 'en' : 'pt-BR' });
 
 export interface Mapeamento {
   id: string;
@@ -62,16 +66,16 @@ export class ErroApi extends Error {
 }
 
 async function pedir<T>(metodo: string, caminho: string, corpo?: unknown): Promise<T> {
-  const init: RequestInit = { method: metodo };
+  const init: RequestInit = { method: metodo, headers: cabecalhoIdioma() };
   if (corpo !== undefined) {
     init.body = JSON.stringify(corpo);
-    init.headers = { 'Content-Type': 'application/json' };
+    init.headers = { ...cabecalhoIdioma(), 'Content-Type': 'application/json' };
   }
   let resposta: Response;
   try {
     resposta = await fetch(caminho, init);
   } catch {
-    throw new ErroApi(0, 'Sem conexão com o servidor do Bora Mapear. Ele está rodando?');
+    throw new ErroApi(0, textos().comum.conexao.semServidor);
   }
   const texto = await resposta.text();
   const dados = texto ? (JSON.parse(texto) as unknown) : null;
@@ -79,7 +83,7 @@ async function pedir<T>(metodo: string, caminho: string, corpo?: unknown): Promi
     const erro = (dados ?? {}) as { erro?: string; detalhes?: unknown };
     const detalhes = Array.isArray(erro.detalhes) ? erro.detalhes.map(String) : [];
     const extra = erro.detalhes && typeof erro.detalhes === 'object' && !Array.isArray(erro.detalhes) ? (erro.detalhes as Record<string, unknown>) : {};
-    throw new ErroApi(resposta.status, erro.erro ?? `Erro ${resposta.status}`, detalhes, extra);
+    throw new ErroApi(resposta.status, erro.erro ?? textos().comum.conexao.erroStatus(resposta.status), detalhes, extra);
   }
   return dados as T;
 }
@@ -174,17 +178,17 @@ async function enviarArquivos(id: string, arquivos: File[]): Promise<Fonte[]> {
   for (const a of arquivos) form.append('arquivos', a);
   let resposta: Response;
   try {
-    resposta = await fetch(`/api/mapeamentos/${id}/fontes`, { method: 'POST', body: form });
+    resposta = await fetch(`/api/mapeamentos/${id}/fontes`, { method: 'POST', body: form, headers: cabecalhoIdioma() });
   } catch {
-    throw new ErroApi(0, 'Sem conexão com o servidor do Bora Mapear.');
+    throw new ErroApi(0, textos().comum.conexao.semServidor);
   }
   const dados = (await resposta.json()) as unknown;
   if (!resposta.ok) {
     const erro = dados as { erro?: string; detalhes?: unknown };
-    throw new ErroApi(resposta.status, erro.erro ?? `Erro ${resposta.status}`, Array.isArray(erro.detalhes) ? erro.detalhes.map(String) : []);
+    throw new ErroApi(resposta.status, erro.erro ?? textos().comum.conexao.erroStatus(resposta.status), Array.isArray(erro.detalhes) ? erro.detalhes.map(String) : []);
   }
   const avisos = resposta.headers.get('X-Bora-Avisos');
-  if (avisos) throw Object.assign(new ErroApi(207, 'Alguns arquivos não foram aceitos.', decodeURIComponent(avisos).split(' | ')), { aceitos: dados as Fonte[] });
+  if (avisos) throw Object.assign(new ErroApi(207, textos().comum.conexao.arquivosRecusados, decodeURIComponent(avisos).split(' | ')), { aceitos: dados as Fonte[] });
   return dados as Fonte[];
 }
 
@@ -228,11 +232,12 @@ export type { EstiloVisual, RegraVisual };
 
 export function formatarCusto(custo: number | null | undefined): string {
   if (custo === null || custo === undefined) return '';
-  return custo < 0.01 ? '< US$ 0,01' : `US$ ${custo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return custo < 0.01 ? textos().comum.formatos.custoMinimo : `US$ ${custo.toLocaleString(localDoIdioma(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function formatarTokens(n: number): string {
-  return n >= 1000 ? `${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : String(n);
+  const mil = textos().comum.formatos.milTokens;
+  return n >= 1000 ? `${(n / 1000).toLocaleString(localDoIdioma(), { maximumFractionDigits: 1 })}${mil === 'k' ? 'k' : ` ${mil}`}` : String(n);
 }
 
 export const NOMES_LINGUAGEM: Record<Linguagem, string> = {
@@ -241,15 +246,14 @@ export const NOMES_LINGUAGEM: Record<Linguagem, string> = {
   reactflow: 'React Flow',
 };
 
-export const DESCRICOES_LINGUAGEM: Record<Linguagem, string> = {
-  bpmn: 'Raias, eventos e gateways. Edita no bpmn-js e exporta o XML que o Camunda abre.',
-  mermaid: 'Código de texto. Bom para documentação, Markdown e wiki.',
-  reactflow: 'Canvas livre: arrastar, pintar e organizar.',
-};
+/** Uma frase sobre cada linguagem, no idioma atual. */
+export function descricaoLinguagem(l: Linguagem): string {
+  return textos().comum.linguagens[l];
+}
 
 export function formatarData(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  return new Date(iso).toLocaleString(localDoIdioma(), { dateStyle: 'short', timeStyle: 'short' });
 }
 
 export function baixar(nomeArquivo: string, conteudo: string, tipo: string): void {

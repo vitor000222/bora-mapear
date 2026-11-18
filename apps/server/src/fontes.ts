@@ -1,4 +1,5 @@
 import { extname } from 'node:path';
+import type { Idioma } from '@bora-mapear/core';
 
 export const FORMATOS_ACEITOS = ['.pdf', '.docx', '.txt', '.md', '.csv', '.vtt', '.srt'] as const;
 export const TAMANHO_MAXIMO = 20 * 1024 * 1024;
@@ -36,8 +37,27 @@ export function limparLegenda(bruto: string): string {
 }
 
 /** Texto de um arquivo enviado. PDF por página, DOCX sem formatação, legenda limpa. */
-export async function extrairTexto(nome: string, bytes: Uint8Array): Promise<{ tipo: string; texto: string }> {
-  if (bytes.byteLength > TAMANHO_MAXIMO) throw new ErroFonte(`"${nome}" passa de 20 MB.`);
+const TEXTOS = {
+  pt: {
+    grande: (nome: string) => `"${nome}" passa de 20 MB.`,
+    formato: (nome: string, aceitos: string) => `Formato não suportado: "${nome}". Use ${aceitos}.`,
+    semTexto: (nome: string) => `Não achei texto em "${nome}". Se for PDF escaneado (imagem), ele precisa de OCR antes.`,
+    ilegivel: (nome: string, motivo: string) => `"${nome}": não deu para ler (${motivo}).`,
+  },
+  en: {
+    grande: (nome: string) => `"${nome}" is larger than 20 MB.`,
+    formato: (nome: string, aceitos: string) => `Unsupported format: "${nome}". Use ${aceitos}.`,
+    semTexto: (nome: string) => `No text found in "${nome}". A scanned PDF (image) needs OCR first.`,
+    ilegivel: (nome: string, motivo: string) => `"${nome}": could not be read (${motivo}).`,
+  },
+} satisfies Record<Idioma, unknown>;
+
+/** Mensagens do leitor de arquivos, para quem chama montar a lista de recusados. */
+export const textosFonte = (idioma: Idioma) => TEXTOS[idioma];
+
+export async function extrairTexto(nome: string, bytes: Uint8Array, idioma: Idioma = 'pt'): Promise<{ tipo: string; texto: string }> {
+  const t = TEXTOS[idioma];
+  if (bytes.byteLength > TAMANHO_MAXIMO) throw new ErroFonte(t.grande(nome));
   const ext = extname(nome).toLowerCase();
   const utf8 = () => new TextDecoder('utf-8').decode(bytes).replace(/^﻿/, '');
   let texto: string;
@@ -64,9 +84,9 @@ export async function extrairTexto(nome: string, bytes: Uint8Array): Promise<{ t
       break;
     }
     default:
-      throw new ErroFonte(`Formato não suportado: "${nome}". Use ${FORMATOS_ACEITOS.join(', ')}.`);
+      throw new ErroFonte(t.formato(nome, FORMATOS_ACEITOS.join(', ')));
   }
   texto = texto.replace(/\n{3,}/g, '\n\n').trim();
-  if (!texto) throw new ErroFonte(`Não achei texto em "${nome}". Se for PDF escaneado (imagem), ele precisa de OCR antes.`);
+  if (!texto) throw new ErroFonte(t.semTexto(nome));
   return { tipo: ext.slice(1), texto };
 }

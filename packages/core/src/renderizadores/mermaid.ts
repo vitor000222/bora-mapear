@@ -1,6 +1,7 @@
 import type { Etapa, Matriz, TipoEtapa } from '../matriz.ts';
 import { etapasUnicas, raiasDoDesenho } from '../layout.ts';
 import { fluxosDaMatriz, idDaRaia } from '../ids.ts';
+import type { Idioma } from '../idioma.ts';
 
 const RESERVADAS = new Set([
   'end', 'graph', 'flowchart', 'subgraph', 'style', 'class', 'classdef', 'click', 'linkstyle', 'direction', 'default',
@@ -85,7 +86,14 @@ export interface OpcoesMermaid {
   direcao?: 'LR' | 'TB';
   /** Cor por chave (do estilo visual), escrita como "style". */
   cores?: Record<string, { corFundo?: string; corBorda?: string }>;
+  /** Idioma do comentário do topo. Padrão: português. */
+  idioma?: Idioma;
 }
+
+const AVISO_TOPO: Record<Idioma, string> = {
+  pt: '%% Gerado a partir da matriz. Mudança de conteúdo vai na matriz.',
+  en: '%% Generated from the matrix. Content changes go in the matrix.',
+};
 
 /**
  * Matriz → Mermaid flowchart. O Mermaid não tem raia: cada raia vira um subgraph.
@@ -96,7 +104,7 @@ export function renderizarMermaid(m: Matriz, opcoes: OpcoesMermaid = {}): string
   const ids = idsMermaid(etapas.map((e) => e.chave));
   const linhas: string[] = [];
   linhas.push(`%% Bora Mapear · ${m.processo.nome.replace(/\n/g, ' ')}`);
-  linhas.push('%% Gerado a partir da matriz. Mudança de conteúdo vai na matriz.');
+  linhas.push(AVISO_TOPO[opcoes.idioma ?? 'pt']);
   linhas.push(`flowchart ${opcoes.direcao ?? 'LR'}`);
 
   for (const raia of raiasDoDesenho(m)) {

@@ -1,5 +1,8 @@
 import { lerMatriz, type Etapa, type Raia, type TipoEtapa } from './matriz.ts';
-import { ErroImportacao, paraId, type ResultadoImportacao } from './importar-bpmn.ts';
+import { ErroImportacao, paraId, TEXTOS_IMPORTACAO, type OpcoesImportacao, type ResultadoImportacao } from './importar-bpmn.ts';
+
+// Mensagens da importação em curso. importarMermaid é síncrona: troca no começo, e os auxiliares leem daqui.
+let t: (typeof TEXTOS_IMPORTACAO)[keyof typeof TEXTOS_IMPORTACAO] = TEXTOS_IMPORTACAO.pt;
 
 type Forma = 'circulo' | 'circulo-duplo' | 'losango' | 'subrotina' | 'estadio' | 'retangulo' | 'hexagono' | 'outra';
 
@@ -70,7 +73,7 @@ function lerNo(linha: string): { no: No; resto: string } | null {
     } else {
       fim = dentro.indexOf(fecha);
     }
-    if (fim < 0) throw new ErroImportacao(`Forma sem fechamento em: ${linha.trim()}`);
+    if (fim < 0) throw new ErroImportacao(t.formaAberta(linha.trim()));
     no.texto = limparTexto(dentro.slice(0, fim));
     no.forma = forma;
     resto = dentro.slice(fim + fecha.length);
@@ -104,7 +107,9 @@ function lerGrupo(linha: string): { nos: No[]; resto: string } | null {
  * formas, rótulos nas setas, cadeias (A --> B --> C), "&", subgraphs (que viram raias) e classes.
  * O que não couber, o Conversor (agente) resolve.
  */
-export function importarMermaid(codigo: string, nomeProcesso = 'Processo importado'): ResultadoImportacao {
+export function importarMermaid(codigo: string, nome?: string, opcoes: OpcoesImportacao = {}): ResultadoImportacao {
+  t = TEXTOS_IMPORTACAO[opcoes.idioma ?? 'pt'];
+  const nomeProcesso = nome ?? t.processoImportado;
   const avisos: string[] = [];
   const linhas = codigo.replace(/\r/g, '').split('\n');
   const nos = new Map<string, No>();
@@ -131,7 +136,7 @@ export function importarMermaid(codigo: string, nomeProcesso = 'Processo importa
     const linha = bruta.replace(/%%.*$/, '').trim().replace(/;$/, '');
     if (!linha) continue;
     if (!cabecalho) {
-      if (!/^(flowchart|graph)\b/i.test(linha)) throw new ErroImportacao('O código não começa com "flowchart" ou "graph": só o fluxograma do Mermaid é lido.');
+      if (!/^(flowchart|graph)\b/i.test(linha)) throw new ErroImportacao(t.naoEFluxograma);
       cabecalho = true;
       continue;
     }
@@ -172,21 +177,21 @@ export function importarMermaid(codigo: string, nomeProcesso = 'Processo importa
     while (resto.trim()) {
       const lig = LIGACAO.exec(resto);
       if (!lig) {
-        avisos.push(`Linha ${i + 1}: trecho não entendido "${resto.trim()}".`);
+        avisos.push(t.trechoNaoEntendido(i + 1, resto.trim()));
         break;
       }
       const rotulo = limparTexto(lig[4] ?? lig[1] ?? lig[2] ?? lig[3] ?? '');
       resto = resto.slice(lig[0].length);
       const proximo = lerGrupo(resto);
-      if (!proximo) throw new ErroImportacao(`Linha ${i + 1}: seta sem destino.`);
+      if (!proximo) throw new ErroImportacao(t.setaSemDestino(i + 1));
       proximo.nos.forEach(registrar);
       for (const de of anteriores) for (const n of proximo.nos) setas.push({ de, para: n.id, ...(rotulo ? { rotulo } : {}) });
       anteriores = proximo.nos.map((n) => n.id);
       resto = proximo.resto;
     }
   }
-  if (!cabecalho) throw new ErroImportacao('O código está vazio.');
-  if (!nos.size) throw new ErroImportacao('Não achei nenhum nó no código.');
+  if (!cabecalho) throw new ErroImportacao(t.codigoVazio);
+  if (!nos.size) throw new ErroImportacao(t.semNos);
 
   const entradas = new Map<string, number>();
   const saidas = new Map<string, number>();
@@ -241,15 +246,15 @@ export function importarMermaid(codigo: string, nomeProcesso = 'Processo importa
         if (vizinho) {
           n.raia = vizinho;
           mudou = true;
-          avisos.push(`"${n.texto ?? id}" estava fora de qualquer subgraph e foi para a raia "${raias.find((r) => r.id === vizinho)?.nome ?? vizinho}", de uma etapa vizinha.`);
+          avisos.push(t.foraDeSubgraph(n.texto ?? id, raias.find((r) => r.id === vizinho)?.nome ?? vizinho));
         }
       }
     }
   }
   const semRaia = ordem.some((id) => !nos.get(id)!.raia);
-  if (semRaia) raias.push({ id: raias.some((r) => r.id === 'geral') ? 'geral-2' : 'geral', nome: 'Geral' });
+  if (semRaia) raias.push({ id: raias.some((r) => r.id === 'geral') ? 'geral-2' : 'geral', nome: t.geral });
   const raiaGeral = raias.at(-1)!.id;
-  if (semRaia && raias.length > 1) avisos.push('Nós sem subgraph e sem vizinho com raia foram para a raia "Geral".');
+  if (semRaia && raias.length > 1) avisos.push(t.paraGeral(t.geral));
 
   const etapas: Etapa[] = ordem.map((id) => {
     const n = nos.get(id)!;
@@ -279,6 +284,6 @@ export function detectarFormato(conteudo: string): 'bpmn' | 'mermaid' | 'csv' | 
     .toLowerCase()
     .split(/[;,\t]/)
     .map((c) => c.trim().replace(/^"|"$/g, ''));
-  if (colunas.includes('chave') && colunas.includes('tipo')) return 'csv';
+  if ((colunas.includes('chave') && colunas.includes('tipo')) || (colunas.includes('key') && colunas.includes('type'))) return 'csv';
   return null;
 }

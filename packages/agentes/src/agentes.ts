@@ -11,6 +11,7 @@ import {
   validarMatriz,
   type Etapa,
   type EstiloVisual,
+  type Idioma,
   type Matriz,
   type TipoEtapa,
   type Operacao,
@@ -23,6 +24,83 @@ import { citacaoNaFonte, dividirTexto, EvidenciaBrutaSchema, formatarEvidencias,
 
 export type AoProgredir = (mensagem: string) => void;
 const nada: AoProgredir = () => {};
+
+const idiomaDe = (cliente: ClienteModelo): Idioma => cliente.idioma ?? 'pt';
+
+// O que os agentes escrevem para a pessoa ler: progresso, avisos, conferências e erros.
+// O que vai para o modelo (prompts, pedidos de correção) continua em português.
+const MENSAGENS = {
+  pt: {
+    lendo: (nome: string, parte: number, partes: number) => `Lendo "${nome}"${partes > 1 ? ` (parte ${parte} de ${partes})` : ''}…`,
+    leitorFim: (nome: string, n: number, falsas: number) =>
+      `"${nome}": ${n} evidências${falsas ? `, ${falsas} não achadas literalmente no texto (marcadas)` : ''}.`,
+    citaInexistentes: (chave: string, lista: string) => `${chave} cita evidências que não existem: ${lista}.`,
+    semEvidencia: (n: number) => `${n} ${n === 1 ? 'linha ficou' : 'linhas ficaram'} sem evidência e foram marcadas para revisão humana.`,
+    corrigindoPortao: (rodada: number) => `Rodada ${rodada}: corrigindo o que o portão apontou…`,
+    portaoAprovada: (etapas: number, raias: number) => `Portão: aprovada (${etapas} etapas, ${raias} raias).`,
+    portaoErros: (n: number) => `Portão: ${n} ${n === 1 ? 'erro' : 'erros'}.`,
+    portaoAindaErros: (n: number, rodadas: number) => `O portão ainda acusa ${n} ${n === 1 ? 'erro' : 'erros'} depois de ${rodadas} rodadas. Corrija na aba Matriz.`,
+    semEvidencias: 'Não há evidências para mapear. Envie fontes e rode o Leitor antes.',
+    mapeando: (n: number) => `Mapeando a partir de ${n} evidências…`,
+    semConteudo: 'Não há conteúdo para converter.',
+    convertendo: 'Convertendo para a matriz…',
+    poucasCores: 'Ainda não há cores suficientes nas suas correções para aprender um estilo. Pinte algumas etapas no desenho e salve as correções.',
+    analisando: (etapas: number, correcoes: number) => `Analisando ${etapas} etapas pintadas e ${correcoes} correções…`,
+    regrasDeEstilo: (n: number) => `${n} ${n === 1 ? 'regra' : 'regras'} de estilo.`,
+    revisando: 'Revisando a matriz contra as evidências…',
+    naoCita: (chave: string, nome: string) => `${chave} ("${nome}") não cita nenhuma evidência.`,
+    portao: (mensagem: string) => `Portão: ${mensagem}`,
+    revisorFim: (lacunas: number, linhas: number) =>
+      `${lacunas} ${lacunas === 1 ? 'lacuna' : 'lacunas'} e ${linhas} ${linhas === 1 ? 'linha' : 'linhas'} para revisar.`,
+    semPedido: 'Escreva o que mudar.',
+    interpretando: 'Interpretando o pedido…',
+    corrigindoOperacoes: (rodada: number) => `Rodada ${rodada}: corrigindo as operações…`,
+    editorFim: (n: number, novos: number) => `${n} ${n === 1 ? 'operação' : 'operações'}${novos ? `; o portão ainda acusa ${novos} erro(s) novo(s)` : ''}.`,
+    naoCouberam: (detalhe: string) => `As operações não couberam na matriz: ${detalhe}`,
+  },
+  en: {
+    lendo: (nome: string, parte: number, partes: number) => `Reading "${nome}"${partes > 1 ? ` (part ${parte} of ${partes})` : ''}…`,
+    leitorFim: (nome: string, n: number, falsas: number) =>
+      `"${nome}": ${n} ${n === 1 ? 'piece' : 'pieces'} of evidence${falsas ? `, ${falsas} not found word for word in the text (flagged)` : ''}.`,
+    citaInexistentes: (chave: string, lista: string) => `${chave} cites evidence that does not exist: ${lista}.`,
+    semEvidencia: (n: number) => `${n} ${n === 1 ? 'row was' : 'rows were'} left without evidence and flagged for human review.`,
+    corrigindoPortao: (rodada: number) => `Round ${rodada}: fixing what the gate flagged…`,
+    portaoAprovada: (etapas: number, raias: number) => `Gate: passed (${etapas} steps, ${raias} lanes).`,
+    portaoErros: (n: number) => `Gate: ${n} ${n === 1 ? 'error' : 'errors'}.`,
+    portaoAindaErros: (n: number, rodadas: number) =>
+      `The gate still reports ${n} ${n === 1 ? 'error' : 'errors'} after ${rodadas} rounds. Fix ${n === 1 ? 'it' : 'them'} in the Matrix tab.`,
+    semEvidencias: 'There is no evidence to map. Add sources and run the Reader first.',
+    mapeando: (n: number) => `Mapping from ${n} ${n === 1 ? 'piece' : 'pieces'} of evidence…`,
+    semConteudo: 'There is no content to convert.',
+    convertendo: 'Converting to the matrix…',
+    poucasCores: 'Your corrections do not have enough colors yet to learn a style. Color a few steps in the diagram and save the corrections.',
+    analisando: (etapas: number, correcoes: number) =>
+      `Analyzing ${etapas} colored ${etapas === 1 ? 'step' : 'steps'} and ${correcoes} ${correcoes === 1 ? 'correction' : 'corrections'}…`,
+    regrasDeEstilo: (n: number) => `${n} style ${n === 1 ? 'rule' : 'rules'}.`,
+    revisando: 'Reviewing the matrix against the evidence…',
+    naoCita: (chave: string, nome: string) => `${chave} ("${nome}") cites no evidence.`,
+    portao: (mensagem: string) => `Gate: ${mensagem}`,
+    revisorFim: (lacunas: number, linhas: number) => `${lacunas} ${lacunas === 1 ? 'gap' : 'gaps'} and ${linhas} ${linhas === 1 ? 'row' : 'rows'} to review.`,
+    semPedido: 'Write what to change.',
+    interpretando: 'Interpreting the request…',
+    corrigindoOperacoes: (rodada: number) => `Round ${rodada}: fixing the operations…`,
+    editorFim: (n: number, novos: number) =>
+      `${n} ${n === 1 ? 'operation' : 'operations'}${novos ? `; the gate still reports ${novos} new ${novos === 1 ? 'error' : 'errors'}` : ''}.`,
+    naoCouberam: (detalhe: string) => `The operations do not fit the matrix: ${detalhe}`,
+  },
+} satisfies Record<Idioma, unknown>;
+
+/**
+ * Vai no fim do prompt de sistema quando a pessoa usa o Bora Mapear em inglês. Os prompts continuam
+ * em português (os modelos entendem); este bloco diz em que língua escrever e vence os exemplos de cima.
+ */
+const SAIDA_EM_INGLES = `OUTPUT LANGUAGE: ENGLISH. This overrides any language cue above.
+The instructions above are in Portuguese, but write everything a person will read in English: step and lane names, descriptions, flow labels ("Yes"/"No", never "Sim"/"Não"), questions, notes, summaries and rule descriptions. Read the Portuguese examples above as patterns for English text: lane "Sales", task "Issue invoice" (verb + object), decision "Credit approved?".
+Keep as they are: evidence quotes (word for word, in the language of the source); JSON keys and enum values ("inicio", "fim", "tarefa_usuario"…); keys such as E01 and EV-001; and names you take from the matrix or the content you received, unless the request asks to change them.`;
+
+function sistemaNoIdioma(sistema: string, idioma: Idioma): string {
+  return idioma === 'en' ? `${sistema}\n\n${SAIDA_EM_INGLES}` : sistema;
+}
 
 const REGRAS_DE_MODELAGEM = `Regras de modelagem:
 1. Raia é FUNÇÃO, não pessoa: "Vendedor", "Financeiro", "Cliente". Um sistema só vira raia quando age sozinho. Id de raia em minúsculas, sem acento, com hífen ("pos-venda").
@@ -55,14 +133,16 @@ export interface ResultadoLeitor {
 
 /** Lê uma fonte e devolve as evidências, cada uma conferida contra o texto original. */
 export async function lerFonte(cliente: ClienteModelo, fonte: { nome: string; texto: string }, aoProgredir: AoProgredir = nada): Promise<ResultadoLeitor> {
+  const idioma = idiomaDe(cliente);
+  const t = MENSAGENS[idioma];
   const pedacos = dividirTexto(fonte.texto);
   let uso = USO_ZERO;
   const evidencias: ResultadoLeitor['evidencias'] = [];
   const vistas = new Set<string>();
   for (const [i, pedaco] of pedacos.entries()) {
-    aoProgredir(`Lendo "${fonte.nome}"${pedacos.length > 1 ? ` (parte ${i + 1} de ${pedacos.length})` : ''}…`);
+    aoProgredir(t.lendo(fonte.nome, i + 1, pedacos.length));
     const r = await gerarJson(cliente, {
-      sistema: SISTEMA_LEITOR,
+      sistema: sistemaNoIdioma(SISTEMA_LEITOR, idioma),
       usuario: `Fonte: ${fonte.nome}${pedacos.length > 1 ? ` (parte ${i + 1} de ${pedacos.length})` : ''}\n\n<<<\n${pedaco}\n>>>`,
       schema: RespostaLeitorSchema,
       nomeSchema: 'evidencias',
@@ -76,7 +156,7 @@ export async function lerFonte(cliente: ClienteModelo, fonte: { nome: string; te
     }
   }
   const falsas = evidencias.filter((e) => !e.verificada).length;
-  aoProgredir(`"${fonte.nome}": ${evidencias.length} evidências${falsas ? `, ${falsas} não achadas literalmente no texto (marcadas)` : ''}.`);
+  aoProgredir(t.leitorFim(fonte.nome, evidencias.length, falsas));
   return { evidencias, uso };
 }
 
@@ -110,13 +190,14 @@ export interface ResultadoMapeador {
 }
 
 /** Evidências citadas que não existem viram aviso; linha sem evidência vai para revisão humana. */
-function conferirEvidencias(m: Matriz, evidencias: Evidencia[]): { matriz: Matriz; avisos: string[] } {
+function conferirEvidencias(m: Matriz, evidencias: Evidencia[], idioma: Idioma): { matriz: Matriz; avisos: string[] } {
+  const t = MENSAGENS[idioma];
   const existentes = new Set(evidencias.map((e) => e.chave));
   const avisos: string[] = [];
   const etapas = m.etapas.map((e) => {
     const citadas = e.evidencias ?? [];
     const falsas = citadas.filter((c) => !existentes.has(c));
-    if (falsas.length) avisos.push(`${e.chave} cita evidências que não existem: ${falsas.join(', ')}.`);
+    if (falsas.length) avisos.push(t.citaInexistentes(e.chave, falsas.join(', ')));
     const validas = citadas.filter((c) => existentes.has(c));
     if (!validas.length && e.tipo !== 'fim' && !e.tipo.startsWith('gateway_')) {
       return { ...e, evidencias: validas, revisarHumano: true };
@@ -124,7 +205,7 @@ function conferirEvidencias(m: Matriz, evidencias: Evidencia[]): { matriz: Matri
     return { ...e, evidencias: validas };
   });
   const semEvidencia = etapas.filter((e) => !e.evidencias?.length && e.tipo !== 'fim' && !e.tipo.startsWith('gateway_')).length;
-  if (semEvidencia) avisos.push(`${semEvidencia} ${semEvidencia === 1 ? 'linha ficou' : 'linhas ficaram'} sem evidência e foram marcadas para revisão humana.`);
+  if (semEvidencia) avisos.push(t.semEvidencia(semEvidencia));
   return { matriz: { ...m, etapas }, avisos };
 }
 
@@ -144,31 +225,36 @@ interface PedidoMatriz {
  * corrigida, até três rodadas. Usado pelo Mapeador e pelo Conversor.
  */
 async function escreverMatriz(cliente: ClienteModelo, p: PedidoMatriz, aoProgredir: AoProgredir): Promise<ResultadoMapeador> {
+  const idioma = idiomaDe(cliente);
+  const t = MENSAGENS[idioma];
+  const sistema = sistemaNoIdioma(p.sistema, idioma);
   let uso = USO_ZERO;
   let historico: Mensagem[] = [];
   let usuario = p.usuario;
   const rodadasMax = 3;
   for (let rodada = 1; ; rodada++) {
-    aoProgredir(rodada === 1 ? p.rotulo : `Rodada ${rodada}: corrigindo o que o portão apontou…`);
-    const r = await gerarJson(cliente, { sistema: p.sistema, usuario, historico, schema: MatrizSchema, nomeSchema: 'matriz', maxTokens: 32000 });
+    aoProgredir(rodada === 1 ? p.rotulo : t.corrigindoPortao(rodada));
+    const r = await gerarJson(cliente, { sistema, usuario, historico, schema: MatrizSchema, nomeSchema: 'matriz', maxTokens: 32000 });
     uso = somarUso(uso, r.uso);
     const matrizBruta: Matriz = { ...r.dado, processo: { ...r.dado.processo, id: p.idProcesso, nome: p.nomeProcesso } };
     const { matriz, avisos } = p.ajustar ? p.ajustar(matrizBruta) : { matriz: matrizBruta, avisos: [] as string[] };
-    const validacao = validarMatriz(matriz);
+    const validacao = validarMatriz(matriz, { idioma });
     const erros = validacao.problemas.filter((p) => p.severidade === 'erro').length;
-    aoProgredir(validacao.ok ? `Portão: aprovada (${matriz.etapas.length} etapas, ${matriz.raias.length} raias).` : `Portão: ${erros} ${erros === 1 ? 'erro' : 'erros'}.`);
+    aoProgredir(validacao.ok ? t.portaoAprovada(matriz.etapas.length, matriz.raias.length) : t.portaoErros(erros));
     if (validacao.ok || rodada >= rodadasMax) {
-      if (!validacao.ok) avisos.push(`O portão ainda acusa ${erros} ${erros === 1 ? 'erro' : 'erros'} depois de ${rodadasMax} rodadas. Corrija na aba Matriz.`);
+      if (!validacao.ok) avisos.push(t.portaoAindaErros(erros, rodadasMax));
       return { matriz, validacao, rodadas: rodada, avisos, uso };
     }
     historico = r.mensagens;
-    usuario = `O portão reprovou a matriz:\n${formatarValidacao(validacao)}\n\nCorrija esses pontos e devolva a matriz COMPLETA de novo.`;
+    usuario = `O portão reprovou a matriz:\n${formatarValidacao(validacao, idioma)}\n\nCorrija esses pontos e devolva a matriz COMPLETA de novo.`;
   }
 }
 
 /** Escreve a matriz a partir das evidências; toda linha aponta a evidência que a sustenta. */
 export async function mapear(cliente: ClienteModelo, entrada: EntradaMapeador, aoProgredir: AoProgredir = nada): Promise<ResultadoMapeador> {
-  if (!entrada.evidencias.length) throw new ErroAgente('Não há evidências para mapear. Envie fontes e rode o Leitor antes.');
+  const idioma = idiomaDe(cliente);
+  const t = MENSAGENS[idioma];
+  if (!entrada.evidencias.length) throw new ErroAgente(t.semEvidencias);
   return escreverMatriz(
     cliente,
     {
@@ -179,8 +265,8 @@ export async function mapear(cliente: ClienteModelo, entrada: EntradaMapeador, a
         `\nEvidências:\n${formatarEvidencias(entrada.evidencias)}\n\nEscreva a matriz completa do processo.`,
       idProcesso: entrada.idProcesso,
       nomeProcesso: entrada.nomeProcesso,
-      rotulo: `Mapeando a partir de ${entrada.evidencias.length} evidências…`,
-      ajustar: (m) => conferirEvidencias(m, entrada.evidencias),
+      rotulo: t.mapeando(entrada.evidencias.length),
+      ajustar: (m) => conferirEvidencias(m, entrada.evidencias, idioma),
     },
     aoProgredir,
   );
@@ -207,7 +293,8 @@ export interface EntradaConversor {
 
 /** Converte código ou texto de outra ferramenta em matriz, passando pelo portão. */
 export async function converter(cliente: ClienteModelo, entrada: EntradaConversor, aoProgredir: AoProgredir = nada): Promise<ResultadoMapeador> {
-  if (!entrada.conteudo.trim()) throw new ErroAgente('Não há conteúdo para converter.');
+  const t = MENSAGENS[idiomaDe(cliente)];
+  if (!entrada.conteudo.trim()) throw new ErroAgente(t.semConteudo);
   return escreverMatriz(
     cliente,
     {
@@ -215,7 +302,7 @@ export async function converter(cliente: ClienteModelo, entrada: EntradaConverso
       usuario: `Processo: ${entrada.nomeProcesso} (id "${entrada.idProcesso}")\n\nConteúdo a converter:\n<<<\n${entrada.conteudo}\n>>>\n\nEscreva a matriz completa.`,
       idProcesso: entrada.idProcesso,
       nomeProcesso: entrada.nomeProcesso,
-      rotulo: 'Convertendo para a matriz…',
+      rotulo: t.convertendo,
     },
     aoProgredir,
   );
@@ -269,12 +356,14 @@ export async function aprenderEstilo(
   entrada: { exemplos: ExemploCor[]; frases: string[]; estiloAtual?: EstiloVisual },
   aoProgredir: AoProgredir = nada,
 ): Promise<ResultadoVisual> {
+  const idioma = idiomaDe(cliente);
+  const t = MENSAGENS[idioma];
   if (entrada.exemplos.length < 2) {
-    throw new ErroAgente('Ainda não há cores suficientes nas suas correções para aprender um estilo. Pinte algumas etapas no desenho e salve as correções.');
+    throw new ErroAgente(t.poucasCores);
   }
-  aoProgredir(`Analisando ${entrada.exemplos.length} etapas pintadas e ${entrada.frases.length} correções…`);
+  aoProgredir(t.analisando(entrada.exemplos.length, entrada.frases.length));
   const r = await gerarJson(cliente, {
-    sistema: SISTEMA_VISUAL,
+    sistema: sistemaNoIdioma(SISTEMA_VISUAL, idioma),
     usuario:
       `Exemplos (uma etapa por linha):\n${entrada.exemplos.map((e) => JSON.stringify(e)).join('\n')}\n\n` +
       `Registro de correções (mais recentes primeiro):\n${entrada.frases.map((f) => `- ${f}`).join('\n') || '(vazio)'}\n\n` +
@@ -295,7 +384,7 @@ export async function aprenderEstilo(
     }
     return { vale, acerta };
   });
-  aoProgredir(`${estilo.regras.length} ${estilo.regras.length === 1 ? 'regra' : 'regras'} de estilo.`);
+  aoProgredir(t.regrasDeEstilo(estilo.regras.length));
   return { estilo, observacoes: r.dado.observacoes, cobertura, uso: r.uso };
 }
 
@@ -330,19 +419,21 @@ export interface ResultadoRevisor {
 }
 
 export async function revisar(cliente: ClienteModelo, entrada: { matriz: Matriz; evidencias: Evidencia[] }, aoProgredir: AoProgredir = nada): Promise<ResultadoRevisor> {
-  aoProgredir('Revisando a matriz contra as evidências…');
+  const idioma = idiomaDe(cliente);
+  const t = MENSAGENS[idioma];
+  aoProgredir(t.revisando);
   const automaticos: string[] = [];
   const existentes = new Set(entrada.evidencias.map((e) => e.chave));
   for (const e of entrada.matriz.etapas) {
     if (e.tipo === 'fim' || e.tipo.startsWith('gateway_')) continue;
-    if (!e.evidencias?.length) automaticos.push(`${e.chave} ("${e.nome}") não cita nenhuma evidência.`);
+    if (!e.evidencias?.length) automaticos.push(t.naoCita(e.chave, e.nome));
     const falsas = (e.evidencias ?? []).filter((c) => !existentes.has(c));
-    if (falsas.length) automaticos.push(`${e.chave} cita evidências que não existem: ${falsas.join(', ')}.`);
+    if (falsas.length) automaticos.push(t.citaInexistentes(e.chave, falsas.join(', ')));
   }
-  for (const p of validarMatriz(entrada.matriz).problemas) automaticos.push(`Portão: ${p.mensagem}`);
+  for (const p of validarMatriz(entrada.matriz, { idioma }).problemas) automaticos.push(t.portao(p.mensagem));
 
   const r = await gerarJson(cliente, {
-    sistema: SISTEMA_REVISOR,
+    sistema: sistemaNoIdioma(SISTEMA_REVISOR, idioma),
     usuario:
       `Matriz:\n${JSON.stringify(entrada.matriz)}\n\n` +
       (entrada.evidencias.length ? `Evidências:\n${formatarEvidencias(entrada.evidencias)}` : 'Não há evidências registradas: a matriz foi escrita à mão.'),
@@ -351,8 +442,7 @@ export async function revisar(cliente: ClienteModelo, entrada: { matriz: Matriz;
   });
   const chaves = new Set(entrada.matriz.etapas.map((e) => e.chave));
   const relatorio = { ...r.dado, revisar: r.dado.revisar.filter((x) => chaves.has(x.chave)) };
-  const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
-  aoProgredir(`${plural(relatorio.lacunas.length, 'lacuna', 'lacunas')} e ${plural(relatorio.revisar.length, 'linha', 'linhas')} para revisar.`);
+  aoProgredir(t.revisorFim(relatorio.lacunas.length, relatorio.revisar.length));
   return { relatorio, automaticos, uso: r.uso };
 }
 
@@ -386,28 +476,31 @@ const chaveProblema = (p: Problema) => `${p.codigo}|${p.chave ?? ''}`;
 
 /** Aplica um pedido em linguagem natural. Só reprova erro novo: o que já estava errado antes não é culpa do pedido. */
 export async function editar(cliente: ClienteModelo, entrada: { matriz: Matriz; pedido: string }, aoProgredir: AoProgredir = nada): Promise<ResultadoEditor> {
-  if (!entrada.pedido.trim()) throw new ErroAgente('Escreva o que mudar.');
-  const errosAntes = new Set(validarMatriz(entrada.matriz).problemas.filter((p) => p.severidade === 'erro').map(chaveProblema));
+  const idioma = idiomaDe(cliente);
+  const t = MENSAGENS[idioma];
+  if (!entrada.pedido.trim()) throw new ErroAgente(t.semPedido);
+  const errosAntes = new Set(validarMatriz(entrada.matriz, { idioma }).problemas.filter((p) => p.severidade === 'erro').map(chaveProblema));
+  const sistema = sistemaNoIdioma(SISTEMA_EDITOR, idioma);
   let uso = USO_ZERO;
   let historico: Mensagem[] = [];
   let usuario = `Matriz atual:\n${JSON.stringify(entrada.matriz)}\n\nPedido: ${entrada.pedido.trim()}`;
   const rodadasMax = 3;
   for (let rodada = 1; ; rodada++) {
-    aoProgredir(rodada === 1 ? 'Interpretando o pedido…' : `Rodada ${rodada}: corrigindo as operações…`);
-    const r = await gerarJson(cliente, { sistema: SISTEMA_EDITOR, usuario, historico, schema: ListaOperacoesSchema, nomeSchema: 'operacoes' });
+    aoProgredir(rodada === 1 ? t.interpretando : t.corrigindoOperacoes(rodada));
+    const r = await gerarJson(cliente, { sistema, usuario, historico, schema: ListaOperacoesSchema, nomeSchema: 'operacoes' });
     uso = somarUso(uso, r.uso);
     let problema: string;
     try {
-      const matriz = aplicarOperacoes(entrada.matriz, r.dado.operacoes);
-      const validacao = validarMatriz(matriz);
+      const matriz = aplicarOperacoes(entrada.matriz, r.dado.operacoes, idioma);
+      const validacao = validarMatriz(matriz, { idioma });
       const novos = validacao.problemas.filter((p) => p.severidade === 'erro' && !errosAntes.has(chaveProblema(p)));
       if (!novos.length || rodada >= rodadasMax) {
-        aoProgredir(`${r.dado.operacoes.length} ${r.dado.operacoes.length === 1 ? 'operação' : 'operações'}${novos.length ? `; o portão ainda acusa ${novos.length} erro(s) novo(s)` : ''}.`);
+        aoProgredir(t.editorFim(r.dado.operacoes.length, novos.length));
         return {
           matriz,
           operacoes: r.dado.operacoes,
           resumo: r.dado.resumo,
-          frases: descreverOperacoes(entrada.matriz, r.dado.operacoes),
+          frases: descreverOperacoes(entrada.matriz, r.dado.operacoes, idioma),
           validacao,
           rodadas: rodada,
           uso,
@@ -415,7 +508,7 @@ export async function editar(cliente: ClienteModelo, entrada: { matriz: Matriz; 
       }
       problema = `Depois das operações, o portão acusou erros novos:\n${novos.map((p) => `- [${p.codigo}] ${p.mensagem}`).join('\n')}`;
     } catch (erro) {
-      if (!(erro instanceof ErroOperacao) || rodada >= rodadasMax) throw erro instanceof ErroOperacao ? new ErroAgente(`As operações não couberam na matriz: ${erro.message}`) : erro;
+      if (!(erro instanceof ErroOperacao) || rodada >= rodadasMax) throw erro instanceof ErroOperacao ? new ErroAgente(t.naoCouberam(erro.message)) : erro;
       problema = `Uma operação não coube na matriz: ${erro.message}`;
     }
     historico = r.mensagens;

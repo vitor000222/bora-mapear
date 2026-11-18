@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EtapaSchema, RaiaSchema, SaidaSchema, type Etapa, type Matriz } from './matriz.ts';
+import type { Idioma } from './idioma.ts';
 
 /**
  * Operações sobre a matriz: é assim que o agente Editor muda um mapeamento.
@@ -46,26 +47,59 @@ export const ListaOperacoesSchema = z.object({
 });
 export type ListaOperacoes = z.infer<typeof ListaOperacoesSchema>;
 
+const TEXTOS = {
+  pt: {
+    operacao: (n: number, msg: string) => `Operação ${n}: ${msg}`,
+    etapaNaoExiste: (chave: string) => `a etapa "${chave}" não existe.`,
+    chaveJaExiste: (chave: string) => `a chave "${chave}" já existe.`,
+    raiaJaExiste: (id: string) => `a raia "${id}" já existe.`,
+    raiaNaoExiste: (id: string) => `a raia "${id}" não existe.`,
+    raiaComEtapas: (id: string, etapas: string) => `a raia "${id}" ainda tem etapas: ${etapas}. Mude-as de raia antes.`,
+    adiciona: (nome: string, chave: string, depois: string | null) => `Adiciona "${nome}" (${chave})${depois ? ` depois de ${depois}` : ''}.`,
+    altera: (nome: string, campos: string) => `Altera ${nome}: ${campos}.`,
+    remove: (nome: string, religar: string | null) => `Remove ${nome}${religar ? `, religando para ${religar}` : ''}.`,
+    adicionaRaia: (nome: string) => `Adiciona a raia "${nome}".`,
+    renomeiaRaia: (id: string, nome: string) => `Renomeia a raia ${id} para "${nome}".`,
+    removeRaia: (id: string) => `Remove a raia ${id}.`,
+  },
+  en: {
+    operacao: (n: number, msg: string) => `Operation ${n}: ${msg}`,
+    etapaNaoExiste: (chave: string) => `step "${chave}" does not exist.`,
+    chaveJaExiste: (chave: string) => `key "${chave}" already exists.`,
+    raiaJaExiste: (id: string) => `lane "${id}" already exists.`,
+    raiaNaoExiste: (id: string) => `lane "${id}" does not exist.`,
+    raiaComEtapas: (id: string, etapas: string) => `lane "${id}" still has steps: ${etapas}. Move them to another lane first.`,
+    adiciona: (nome: string, chave: string, depois: string | null) => `Adds "${nome}" (${chave})${depois ? ` after ${depois}` : ''}.`,
+    altera: (nome: string, campos: string) => `Changes ${nome}: ${campos}.`,
+    remove: (nome: string, religar: string | null) => `Removes ${nome}${religar ? `, reconnecting to ${religar}` : ''}.`,
+    adicionaRaia: (nome: string) => `Adds lane "${nome}".`,
+    renomeiaRaia: (id: string, nome: string) => `Renames lane ${id} to "${nome}".`,
+    removeRaia: (id: string) => `Removes lane ${id}.`,
+  },
+} satisfies Record<Idioma, unknown>;
+
 export class ErroOperacao extends Error {
   readonly indice: number;
-  constructor(indice: number, mensagem: string) {
-    super(`Operação ${indice + 1}: ${mensagem}`);
+  constructor(indice: number, mensagem: string, idioma: Idioma = 'pt') {
+    super(TEXTOS[idioma].operacao(indice + 1, mensagem));
     this.indice = indice;
   }
 }
 
 /** Aplica as operações em ordem, sem mexer na matriz original. Lança ErroOperacao na primeira que não cabe. */
-export function aplicarOperacoes(m: Matriz, operacoes: Operacao[]): Matriz {
+export function aplicarOperacoes(m: Matriz, operacoes: Operacao[], idioma: Idioma = 'pt'): Matriz {
+  const t = TEXTOS[idioma];
   const nova: Matriz = structuredClone(m);
   operacoes.forEach((op, i) => {
+    const falha = (mensagem: string) => new ErroOperacao(i, mensagem, idioma);
     const acharEtapa = (chave: string) => {
       const j = nova.etapas.findIndex((e) => e.chave === chave);
-      if (j < 0) throw new ErroOperacao(i, `a etapa "${chave}" não existe.`);
+      if (j < 0) throw falha(t.etapaNaoExiste(chave));
       return j;
     };
     switch (op.op) {
       case 'adicionar_etapa': {
-        if (nova.etapas.some((e) => e.chave === op.etapa.chave)) throw new ErroOperacao(i, `a chave "${op.etapa.chave}" já existe.`);
+        if (nova.etapas.some((e) => e.chave === op.etapa.chave)) throw falha(t.chaveJaExiste(op.etapa.chave));
         const posicao = op.depoisDe ? acharEtapa(op.depoisDe) + 1 : nova.etapas.length;
         nova.etapas.splice(posicao, 0, structuredClone(op.etapa));
         break;
@@ -89,22 +123,22 @@ export function aplicarOperacoes(m: Matriz, operacoes: Operacao[]): Matriz {
         break;
       }
       case 'adicionar_raia': {
-        if (nova.raias.some((r) => r.id === op.raia.id)) throw new ErroOperacao(i, `a raia "${op.raia.id}" já existe.`);
+        if (nova.raias.some((r) => r.id === op.raia.id)) throw falha(t.raiaJaExiste(op.raia.id));
         const k = op.depoisDe ? nova.raias.findIndex((r) => r.id === op.depoisDe) : -1;
-        if (op.depoisDe && k < 0) throw new ErroOperacao(i, `a raia "${op.depoisDe}" não existe.`);
+        if (op.depoisDe && k < 0) throw falha(t.raiaNaoExiste(op.depoisDe));
         nova.raias.splice(k < 0 ? nova.raias.length : k + 1, 0, { ...op.raia });
         break;
       }
       case 'renomear_raia': {
         const raia = nova.raias.find((r) => r.id === op.id);
-        if (!raia) throw new ErroOperacao(i, `a raia "${op.id}" não existe.`);
+        if (!raia) throw falha(t.raiaNaoExiste(op.id));
         raia.nome = op.nome;
         break;
       }
       case 'remover_raia': {
-        if (!nova.raias.some((r) => r.id === op.id)) throw new ErroOperacao(i, `a raia "${op.id}" não existe.`);
+        if (!nova.raias.some((r) => r.id === op.id)) throw falha(t.raiaNaoExiste(op.id));
         const usando = nova.etapas.filter((e) => e.raia === op.id).map((e) => e.chave);
-        if (usando.length) throw new ErroOperacao(i, `a raia "${op.id}" ainda tem etapas: ${usando.join(', ')}. Mude-as de raia antes.`);
+        if (usando.length) throw falha(t.raiaComEtapas(op.id, usando.join(', ')));
         nova.raias = nova.raias.filter((r) => r.id !== op.id);
         break;
       }
@@ -114,7 +148,8 @@ export function aplicarOperacoes(m: Matriz, operacoes: Operacao[]): Matriz {
 }
 
 /** Frases curtas do que as operações fazem, para mostrar ao usuário antes de aplicar. */
-export function descreverOperacoes(m: Matriz, operacoes: Operacao[]): string[] {
+export function descreverOperacoes(m: Matriz, operacoes: Operacao[], idioma: Idioma = 'pt'): string[] {
+  const t = TEXTOS[idioma];
   const nome = (chave: string) => {
     const e = m.etapas.find((x) => x.chave === chave);
     return e?.nome ? `"${e.nome}" (${chave})` : chave;
@@ -122,17 +157,17 @@ export function descreverOperacoes(m: Matriz, operacoes: Operacao[]): string[] {
   return operacoes.map((op) => {
     switch (op.op) {
       case 'adicionar_etapa':
-        return `Adiciona "${op.etapa.nome}" (${op.etapa.chave})${op.depoisDe ? ` depois de ${nome(op.depoisDe)}` : ''}.`;
+        return t.adiciona(op.etapa.nome, op.etapa.chave, op.depoisDe ? nome(op.depoisDe) : null);
       case 'alterar_etapa':
-        return `Altera ${nome(op.chave)}: ${Object.keys(op.campos).join(', ')}.`;
+        return t.altera(nome(op.chave), Object.keys(op.campos).join(', '));
       case 'remover_etapa':
-        return `Remove ${nome(op.chave)}${op.religarPara?.length ? `, religando para ${op.religarPara.map((s) => s.para).join(', ')}` : ''}.`;
+        return t.remove(nome(op.chave), op.religarPara?.length ? op.religarPara.map((s) => s.para).join(', ') : null);
       case 'adicionar_raia':
-        return `Adiciona a raia "${op.raia.nome}".`;
+        return t.adicionaRaia(op.raia.nome);
       case 'renomear_raia':
-        return `Renomeia a raia ${op.id} para "${op.nome}".`;
+        return t.renomeiaRaia(op.id, op.nome);
       case 'remover_raia':
-        return `Remove a raia ${op.id}.`;
+        return t.removeRaia(op.id);
     }
   });
 }

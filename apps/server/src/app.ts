@@ -15,7 +15,7 @@ import {
 } from '@bora-mapear/core';
 import type { Repositorio } from './repositorio.ts';
 import { MODELOS, matrizInicial } from './modelos.ts';
-import { corpo, ErroHttp } from './http.ts';
+import { corpo, ErroHttp, idiomaDe } from './http.ts';
 import { registrarRotasIa } from './rotas-ia.ts';
 import { Cofre } from './segredo.ts';
 import { Executor } from './execucoes.ts';
@@ -23,6 +23,13 @@ import { Executor } from './execucoes.ts';
 export { ErroHttp } from './http.ts';
 
 const Linguagem = z.enum(LINGUAGENS);
+
+const NAO_ENCONTRADO = { pt: 'Mapeamento não encontrado.', en: 'Process map not found.' };
+
+const FRASE_CODIGO = {
+  pt: { voltou: 'Voltou o código Mermaid ao gerado pela matriz.', editou: 'Editou o código Mermaid à mão.' },
+  en: { voltou: 'Reset the Mermaid code to the one generated from the matrix.', editou: 'Edited the Mermaid code by hand.' },
+};
 
 const NovoMapeamento = z.object({
   nome: z.string().trim().min(1, 'Dê um nome ao mapeamento.').max(200),
@@ -68,7 +75,7 @@ function matrizOuErro(dado: unknown) {
   try {
     return lerMatriz(dado);
   } catch (erro) {
-    throw new ErroHttp(422, erro instanceof Error ? erro.message : 'Matriz fora do formato.');
+    throw new ErroHttp(422, erro instanceof Error ? erro.message : { pt: 'Matriz fora do formato.', en: 'The matrix is not in the expected format.' });
   }
 }
 
@@ -102,14 +109,14 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
   const executor = opcoes.executor ?? new Executor(repo);
 
   app.onError((erro, c) => {
-    if (erro instanceof ErroHttp) return c.json({ erro: erro.message, detalhes: erro.detalhes ?? null }, erro.status);
+    if (erro instanceof ErroHttp) return c.json({ erro: erro.mensagemEm(idiomaDe(c)), detalhes: erro.detalhes ?? null }, erro.status);
     console.error(erro);
-    return c.json({ erro: 'Erro interno no servidor.' }, 500);
+    return c.json({ erro: idiomaDe(c) === 'en' ? 'Internal server error.' : 'Erro interno no servidor.' }, 500);
   });
 
   const exigirMapeamento = async (id: string) => {
     const m = await repo.obterMapeamento(id);
-    if (!m) throw new ErroHttp(404, 'Mapeamento não encontrado.');
+    if (!m) throw new ErroHttp(404, NAO_ENCONTRADO);
     return m;
   };
   /** Quem aponta para este mapeamento como subprocesso, e para quem as etapas dele apontam. */
@@ -131,7 +138,7 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
 
   const exigirLinguagem = (valor: string): Linguagem => {
     const r = Linguagem.safeParse(valor);
-    if (!r.success) throw new ErroHttp(404, `Linguagem desconhecida: ${valor}. Use ${LINGUAGENS.join(', ')}.`);
+    if (!r.success) throw new ErroHttp(404, { pt: `Linguagem desconhecida: ${valor}. Use ${LINGUAGENS.join(', ')}.`, en: `Unknown notation: ${valor}. Use ${LINGUAGENS.join(', ')}.` });
     return r.data;
   };
 
@@ -142,8 +149,10 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
 
   app.post('/api/mapeamentos', async (c) => {
     const { modelo, ...dados } = await corpo(c, NovoMapeamento);
-    const matriz = matrizInicial(modelo, dados.nome);
-    const mapeamento = await repo.criarMapeamento(dados, matriz, 'pessoa', modelo === 'exemplo' ? 'Criado a partir do exemplo.' : 'Criado em branco.');
+    const idioma = idiomaDe(c);
+    const matriz = matrizInicial(modelo, dados.nome, idioma);
+    const mensagens = idioma === 'en' ? { exemplo: 'Created from the example.', branco: 'Created blank.' } : { exemplo: 'Criado a partir do exemplo.', branco: 'Criado em branco.' };
+    const mapeamento = await repo.criarMapeamento(dados, matriz, 'pessoa', modelo === 'exemplo' ? mensagens.exemplo : mensagens.branco);
     return c.json(mapeamento, 201);
   });
 
@@ -156,7 +165,7 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
     for (const v of await repo.listarVisoes(id)) visoes[v.linguagem] = v;
     const { matriz, ...cabecalho } = versao;
     const { pais, filhos } = await parentesco(id, matriz);
-    return c.json({ mapeamento, versao: cabecalho, matriz, validacao: validarMatriz(matriz), visoes, pais, filhos });
+    return c.json({ mapeamento, versao: cabecalho, matriz, validacao: validarMatriz(matriz, { idioma: idiomaDe(c) }), visoes, pais, filhos });
   });
 
   /** Cria o mapeamento que detalha uma etapa de subprocesso e liga os dois (versão nova do pai). */
@@ -166,13 +175,21 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
     const { chave } = await corpo(c, z.object({ chave: z.string().min(1) }));
     const versao = (await repo.versaoAtual(id))!;
     const etapa = versao.matriz.etapas.find((e) => e.chave === chave);
-    if (!etapa) throw new ErroHttp(404, `A etapa ${chave} não existe na versão atual.`);
-    if (etapa.tipo !== 'subprocesso') throw new ErroHttp(400, `A etapa ${chave} não é do tipo subprocesso. Mude o tipo na Matriz antes.`);
-    if (etapa.subprocesso && (await repo.obterMapeamento(etapa.subprocesso))) throw new ErroHttp(409, 'Esta etapa já tem um mapeamento filho.');
-    const nome = etapa.nome.trim() || `Subprocesso ${chave}`;
-    const filho = await repo.criarMapeamento({ nome, descricao: `Detalha a etapa ${chave} de "${versao.matriz.processo.nome}".`, linguagem: 'bpmn' }, matrizInicial('em-branco', nome), 'pessoa', 'Criado como subprocesso.');
+    if (!etapa) throw new ErroHttp(404, { pt: `A etapa ${chave} não existe na versão atual.`, en: `Step ${chave} is not in the current version.` });
+    if (etapa.tipo !== 'subprocesso')
+      throw new ErroHttp(400, { pt: `A etapa ${chave} não é do tipo subprocesso. Mude o tipo na Matriz antes.`, en: `Step ${chave} is not a subprocess. Change its type in the Matrix first.` });
+    if (etapa.subprocesso && (await repo.obterMapeamento(etapa.subprocesso)))
+      throw new ErroHttp(409, { pt: 'Esta etapa já tem um mapeamento filho.', en: 'This step already has a child map.' });
+    const idioma = idiomaDe(c);
+    const en = idioma === 'en';
+    const pai = versao.matriz.processo.nome;
+    const nome = etapa.nome.trim() || (en ? `Subprocess ${chave}` : `Subprocesso ${chave}`);
+    const descricao = en ? `Details step ${chave} of "${pai}".` : `Detalha a etapa ${chave} de "${pai}".`;
+    const criado = en ? 'Created as a subprocess.' : 'Criado como subprocesso.';
+    const filho = await repo.criarMapeamento({ nome, descricao, linguagem: 'bpmn' }, matrizInicial('em-branco', nome, idioma), 'pessoa', criado);
     const matriz = { ...versao.matriz, etapas: versao.matriz.etapas.map((e) => (e.chave === chave ? { ...e, subprocesso: filho.id } : e)) };
-    const nova = await repo.salvarVersao(id, matriz, 'pessoa', `Ligou "${nome}" (${chave}) ao mapeamento filho.`);
+    const ligou = en ? `Linked "${nome}" (${chave}) to its child map.` : `Ligou "${nome}" (${chave}) ao mapeamento filho.`;
+    const nova = await repo.salvarVersao(id, matriz, 'pessoa', ligou);
     return c.json({ filho, versaoPai: nova.numero }, 201);
   });
 
@@ -185,7 +202,7 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
   });
 
   app.delete('/api/mapeamentos/:id', async (c) => {
-    if (!(await repo.apagarMapeamento(c.req.param('id')))) throw new ErroHttp(404, 'Mapeamento não encontrado.');
+    if (!(await repo.apagarMapeamento(c.req.param('id')))) throw new ErroHttp(404, NAO_ENCONTRADO);
     return c.body(null, 204);
   });
 
@@ -199,8 +216,8 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
     const id = c.req.param('id');
     await exigirMapeamento(id);
     const versao = await repo.obterVersao(id, Number(c.req.param('numero')));
-    if (!versao) throw new ErroHttp(404, 'Versão não encontrada.');
-    return c.json({ ...versao, validacao: validarMatriz(versao.matriz) });
+    if (!versao) throw new ErroHttp(404, { pt: 'Versão não encontrada.', en: 'Version not found.' });
+    return c.json({ ...versao, validacao: validarMatriz(versao.matriz, { idioma: idiomaDe(c) }) });
   });
 
   /** Salva uma versão nova. Matriz reprovada no portão também é salva (rascunho); a validação volta junto. */
@@ -211,7 +228,7 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
     const matriz = matrizOuErro(dado);
     const versao = await repo.salvarVersao(id, matriz, 'pessoa', mensagem);
     const { matriz: _m, ...cabecalho } = versao;
-    return c.json({ versao: cabecalho, validacao: validarMatriz(matriz) }, 201);
+    return c.json({ versao: cabecalho, validacao: validarMatriz(matriz, { idioma: idiomaDe(c) }) }, 201);
   });
 
   /** Grava as correções de uma visão e registra, em frases, o que mudou desde a última gravação. */
@@ -222,7 +239,7 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
     const { correcoes } = await corpo(c, z.object({ correcoes: CorrecoesSchema }));
     const versao = (await repo.versaoAtual(id))!;
     const antes = (await repo.obterVisao(id, linguagem))?.correcoes ?? correcoesVazias();
-    const frases = descreverMudanca(versao.matriz, antes, correcoes as Correcoes);
+    const frases = descreverMudanca(versao.matriz, antes, correcoes as Correcoes, idiomaDe(c));
     const visao = await repo.salvarCorrecoes(id, linguagem, correcoes as Correcoes);
     const registro = frases.length ? await repo.registrarCorrecao(id, linguagem, versao.numero, frases) : null;
     return c.json({ visao, registro });
@@ -231,13 +248,14 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
   app.put('/api/mapeamentos/:id/visoes/:linguagem/codigo', async (c) => {
     const id = c.req.param('id');
     const linguagem = exigirLinguagem(c.req.param('linguagem'));
-    if (linguagem !== 'mermaid') throw new ErroHttp(400, 'Só a visão Mermaid aceita código editado à mão por enquanto.');
+    if (linguagem !== 'mermaid')
+      throw new ErroHttp(400, { pt: 'Só a visão Mermaid aceita código editado à mão por enquanto.', en: 'Only the Mermaid view accepts hand-edited code for now.' });
     await exigirMapeamento(id);
     const { codigo } = await corpo(c, NovoCodigo);
     const visao = await repo.salvarCodigo(id, linguagem, codigo);
     const versao = (await repo.versaoAtual(id))!;
     const registro = await repo.registrarCorrecao(id, linguagem, versao.numero, [
-      codigo === null ? 'Voltou o código Mermaid ao gerado pela matriz.' : 'Editou o código Mermaid à mão.',
+      FRASE_CODIGO[idiomaDe(c)][codigo === null ? 'voltou' : 'editou'],
     ]);
     return c.json({ visao, registro });
   });
@@ -251,7 +269,7 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
   registrarRotasIa(app, { repo, cofre, executor, ...(opcoes.fetch ? { fetch: opcoes.fetch } : {}) });
 
   app.all('/api/*', () => {
-    throw new ErroHttp(404, 'Rota não encontrada.');
+    throw new ErroHttp(404, { pt: 'Rota não encontrada.', en: 'Route not found.' });
   });
 
   if (opcoes.estaticos) {

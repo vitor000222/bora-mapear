@@ -1,6 +1,8 @@
 // Exportar o desenho: SVG como está, PNG pelo canvas (fundo branco, 2x para ficar nítido)
 // e PDF vetorial (jsPDF + svg2pdf), do tamanho exato do desenho.
 
+import { textos } from './i18n/index.tsx';
+
 export type FormatoImagem = 'svg' | 'png' | 'pdf';
 
 /** Largura e altura do SVG, pelo viewBox ou pelos atributos. */
@@ -33,7 +35,7 @@ export async function svgParaPng(svg: string, escala = 2): Promise<Blob> {
     imagem.decoding = 'sync';
     await new Promise<void>((ok, falha) => {
       imagem.onload = () => ok();
-      imagem.onerror = () => falha(new Error('O navegador não conseguiu desenhar o SVG.'));
+      imagem.onerror = () => falha(new Error(textos().comum.exportar.svgFalhou));
       imagem.src = url;
     });
     const canvas = document.createElement('canvas');
@@ -43,7 +45,7 @@ export async function svgParaPng(svg: string, escala = 2): Promise<Blob> {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(imagem, 0, 0, canvas.width, canvas.height);
-    return await new Promise<Blob>((ok, falha) => canvas.toBlob((b) => (b ? ok(b) : falha(new Error('Falha ao gerar o PNG.'))), 'image/png'));
+    return await new Promise<Blob>((ok, falha) => canvas.toBlob((b) => (b ? ok(b) : falha(new Error(textos().comum.exportar.pngFalhou))), 'image/png'));
   }
 }
 

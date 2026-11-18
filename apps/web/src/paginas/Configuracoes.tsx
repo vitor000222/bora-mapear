@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { GRUPOS_TIPO, ROTULOS_TIPO, type TipoEtapa } from '@bora-mapear/core';
+import { gruposTipo, rotulosTipo, type TipoEtapa } from '@bora-mapear/core';
 import {
   apiIa,
   ErroApi,
@@ -13,50 +13,38 @@ import {
   type TipoProvedor,
 } from '../api.ts';
 import { useAvisos } from '../avisos.tsx';
+import { useIdioma, useTextos, type Textos } from '../i18n/index.tsx';
+
+type TextosConfig = Textos['config'];
 
 interface Predefinido {
-  nome: string;
+  /** Nome próprio do serviço; sem ele, o nome vem dos textos (`novoProvedor.outro`). */
+  nome?: string;
   tipo: TipoProvedor;
   urlBase: string;
   pedeChave: boolean;
-  dica: string;
+  dica?: keyof TextosConfig['novoProvedor']['dicas'];
 }
 
 const PREDEFINIDOS: Predefinido[] = [
-  { nome: 'OpenRouter', tipo: 'openai', urlBase: 'https://openrouter.ai/api/v1', pedeChave: true, dica: 'Uma chave para centenas de modelos. Informa o custo de cada chamada.' },
-  { nome: 'Anthropic', tipo: 'anthropic', urlBase: 'https://api.anthropic.com', pedeChave: true, dica: 'Modelos Claude, pelo SDK oficial.' },
-  { nome: 'OpenAI', tipo: 'openai', urlBase: 'https://api.openai.com/v1', pedeChave: true, dica: '' },
-  { nome: 'Google Gemini', tipo: 'openai', urlBase: 'https://generativelanguage.googleapis.com/v1beta/openai', pedeChave: true, dica: 'Pelo endpoint compatível com OpenAI do Google.' },
-  { nome: 'Groq', tipo: 'openai', urlBase: 'https://api.groq.com/openai/v1', pedeChave: true, dica: '' },
-  { nome: 'DeepSeek', tipo: 'openai', urlBase: 'https://api.deepseek.com/v1', pedeChave: true, dica: '' },
-  { nome: 'Ollama (local)', tipo: 'openai', urlBase: 'http://127.0.0.1:11434/v1', pedeChave: false, dica: 'Modelos rodando no seu computador, sem chave e sem custo.' },
-  { nome: 'LM Studio (local)', tipo: 'openai', urlBase: 'http://127.0.0.1:1234/v1', pedeChave: false, dica: '' },
-  { nome: 'Outro (compatível com OpenAI)', tipo: 'openai', urlBase: 'https://', pedeChave: true, dica: 'Qualquer serviço que responda em /chat/completions.' },
+  { nome: 'OpenRouter', tipo: 'openai', urlBase: 'https://openrouter.ai/api/v1', pedeChave: true, dica: 'openrouter' },
+  { nome: 'Anthropic', tipo: 'anthropic', urlBase: 'https://api.anthropic.com', pedeChave: true, dica: 'anthropic' },
+  { nome: 'OpenAI', tipo: 'openai', urlBase: 'https://api.openai.com/v1', pedeChave: true },
+  { nome: 'Google Gemini', tipo: 'openai', urlBase: 'https://generativelanguage.googleapis.com/v1beta/openai', pedeChave: true, dica: 'gemini' },
+  { nome: 'Groq', tipo: 'openai', urlBase: 'https://api.groq.com/openai/v1', pedeChave: true },
+  { nome: 'DeepSeek', tipo: 'openai', urlBase: 'https://api.deepseek.com/v1', pedeChave: true },
+  { nome: 'Ollama (local)', tipo: 'openai', urlBase: 'http://127.0.0.1:11434/v1', pedeChave: false, dica: 'ollama' },
+  { nome: 'LM Studio (local)', tipo: 'openai', urlBase: 'http://127.0.0.1:1234/v1', pedeChave: false },
+  { tipo: 'openai', urlBase: 'https://', pedeChave: true, dica: 'outro' },
 ];
 
-const NOMES_AGENTE: Record<AgenteConfiguravel, string> = {
-  padrao: 'Padrão',
-  leitor: 'Leitor',
-  mapeador: 'Mapeador',
-  revisor: 'Revisor',
-  editor: 'Editor',
-  conversor: 'Conversor',
-  visual: 'Visual',
-};
-
-const ESFORCOS: Array<{ valor: Esforco | ''; nome: string }> = [
-  { valor: '', nome: 'Padrão do modelo' },
-  { valor: 'low', nome: 'Baixo' },
-  { valor: 'medium', nome: 'Médio' },
-  { valor: 'high', nome: 'Alto' },
-  { valor: 'xhigh', nome: 'Muito alto' },
-  { valor: 'max', nome: 'Máximo' },
-];
+const ESFORCOS: Array<Esforco | ''> = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
 
 const mensagemDe = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function Configuracoes() {
   const avisar = useAvisos();
+  const t = useTextos().config;
   const [provedores, setProvedores] = useState<Provedor[] | null>(null);
   const [agentes, setAgentes] = useState<ConfigAgente[]>([]);
   const [descricoes, setDescricoes] = useState<Partial<Record<AgenteConfiguravel, string>>>({});
@@ -82,31 +70,29 @@ export function Configuracoes() {
     try {
       const lista = await apiIa.modelos(provedorId);
       setModelos((m) => ({ ...m, [provedorId]: lista }));
-      avisar(`${lista.length} modelos disponíveis neste provedor.`, 'info');
+      avisar(t.modelos.disponiveis(lista.length), 'info');
     } catch (e) {
-      avisar(`Não deu para listar os modelos: ${mensagemDe(e)}`, 'erro');
+      avisar(t.modelos.naoListou(mensagemDe(e)), 'erro');
     }
   };
 
   return (
     <section className="pagina">
       <a href="#/" className="voltar">
-        ← Mapeamentos
+        {t.voltar}
       </a>
       <div>
-        <h1>Configurações</h1>
-        <p className="suave">
-          Os agentes usam a sua chave. Ela fica cifrada no banco local, nunca volta para o navegador, e as chamadas saem deste servidor direto para o provedor.
-        </p>
+        <h1>{t.titulo}</h1>
+        <p className="suave">{t.intro}</p>
       </div>
 
       <div className="cartao secao">
         <div className="secao-cabecalho">
-          <h2>Provedores</h2>
-          <span className="suave pequeno">Onde os modelos rodam.</span>
+          <h2>{t.provedores.titulo}</h2>
+          <span className="suave pequeno">{t.provedores.subtitulo}</span>
         </div>
-        {provedores === null && <p className="suave">Carregando…</p>}
-        {provedores?.length === 0 && <p className="suave">Nenhum provedor ainda. Cadastre um abaixo para os agentes funcionarem.</p>}
+        {provedores === null && <p className="suave">{t.provedores.carregando}</p>}
+        {provedores?.length === 0 && <p className="suave">{t.provedores.nenhum}</p>}
         <ul className="lista-provedores">
           {provedores?.map((p) => (
             <ItemProvedor key={p.id} provedor={p} aoMudar={() => void carregar()} />
@@ -117,8 +103,8 @@ export function Configuracoes() {
 
       <div className="cartao secao">
         <div className="secao-cabecalho">
-          <h2>Modelo de cada agente</h2>
-          <span className="suave pequeno">O padrão vale para todo agente sem modelo próprio.</span>
+          <h2>{t.modelos.titulo}</h2>
+          <span className="suave pequeno">{t.modelos.subtitulo}</span>
         </div>
         {agentes.map((a) => (
           <LinhaAgente
@@ -131,7 +117,7 @@ export function Configuracoes() {
             aoSalvar={async (c) => {
               try {
                 await apiIa.salvarAgente(c);
-                avisar(`${NOMES_AGENTE[c.agente]}: salvo.`, 'sucesso');
+                avisar(t.modelos.salvo(t.agentes[c.agente]), 'sucesso');
                 void carregar();
               } catch (e) {
                 avisar(mensagemDe(e), 'erro', e instanceof ErroApi ? e.detalhes : undefined);
@@ -146,19 +132,19 @@ export function Configuracoes() {
   );
 }
 
-const NOMES_FAMILIA: Record<string, string> = { evento: 'Eventos', tarefa: 'Tarefas', subprocesso: 'Subprocessos', gateway: 'Decisões e gateways' };
+type FamiliaRegra = keyof TextosConfig['familias'];
 
-function resumoCondicao(r: RegraVisual): string {
+function resumoCondicao(r: RegraVisual, t: TextosConfig, rotulos: Record<TipoEtapa, string>): string {
   const q = r.quando;
   const partes = [
-    q.tipos?.length && q.tipos.map((t) => ROTULOS_TIPO[t]).join(', '),
-    q.familias?.length && q.familias.map((f) => NOMES_FAMILIA[f]).join(', '),
-    q.raias?.length && `raia ${q.raias.join(', ')}`,
-    q.nomeContem && `nome com "${q.nomeContem}"`,
-    q.revisarHumano && 'pede revisão humana',
-    q.semEvidencia && 'sem evidência',
+    q.tipos?.length && q.tipos.map((tipo) => rotulos[tipo]).join(', '),
+    q.familias?.length && q.familias.map((f) => t.familias[f]).join(', '),
+    q.raias?.length && t.condicao.raia(q.raias.join(', ')),
+    q.nomeContem && t.condicao.nomeContem(q.nomeContem),
+    q.revisarHumano && t.condicao.revisarHumano,
+    q.semEvidencia && t.condicao.semEvidencia,
   ].filter(Boolean);
-  return partes.length ? partes.join(' · ') : 'todas as etapas';
+  return partes.length ? partes.join(' · ') : t.condicao.todas;
 }
 
 function Amostra({ regra }: { regra: Pick<RegraVisual, 'corFundo' | 'corBorda'> }) {
@@ -175,6 +161,10 @@ interface PropostaEstilo {
 /** O estilo visual: regras de cor que o "Aplicar meu estilo" usa em qualquer desenho. */
 function SecaoEstilo() {
   const avisar = useAvisos();
+  const textosConfig = useTextos().config;
+  const t = textosConfig.estilo;
+  const { idioma } = useIdioma();
+  const rotulos = rotulosTipo(idioma);
   const [estilo, setEstilo] = useState<EstiloVisual | null>(null);
   const [proposta, setProposta] = useState<PropostaEstilo | null>(null);
   const [aprendendo, setAprendendo] = useState(false);
@@ -209,37 +199,36 @@ function SecaoEstilo() {
   const adicionar = () => {
     if (!estilo) return;
     const [tipoAlvo, valor] = alvo.split(':') as ['tipo' | 'familia', string];
-    const nome = tipoAlvo === 'tipo' ? ROTULOS_TIPO[valor as TipoEtapa] : (NOMES_FAMILIA[valor] ?? valor);
+    const familias: Record<string, string> = textosConfig.familias;
+    const nome = tipoAlvo === 'tipo' ? rotulos[valor as TipoEtapa] : (familias[valor] ?? valor);
     const regra: RegraVisual = {
-      descricao: `${nome} em ${fundo}`,
-      quando: tipoAlvo === 'tipo' ? { tipos: [valor as TipoEtapa] } : { familias: [valor as 'evento' | 'tarefa' | 'subprocesso' | 'gateway'] },
+      descricao: t.descricaoRegra(nome, fundo),
+      quando: tipoAlvo === 'tipo' ? { tipos: [valor as TipoEtapa] } : { familias: [valor as FamiliaRegra] },
       corFundo: fundo,
       corBorda: borda,
     };
-    void salvar({ versao: 1, regras: [...estilo.regras, regra] }, 'Regra adicionada.');
+    void salvar({ versao: 1, regras: [...estilo.regras, regra] }, t.regraAdicionada);
   };
 
   return (
     <div className="cartao secao">
       <div className="secao-cabecalho">
-        <h2>Estilo visual</h2>
-        <span className="suave pequeno">Regras de cor que o botão "Aplicar meu estilo" usa em qualquer desenho. A de baixo vence.</span>
+        <h2>{t.titulo}</h2>
+        <span className="suave pequeno">{t.subtitulo}</span>
       </div>
-      {estilo?.regras.length === 0 && (
-        <p className="suave">Nenhuma regra ainda. Crie uma abaixo, ou deixe o agente Visual aprender com as cores que você já aplicou.</p>
-      )}
+      {estilo?.regras.length === 0 && <p className="suave">{t.nenhuma}</p>}
       <ol className="lista-regras">
         {estilo?.regras.map((r, i) => (
           <li key={i}>
             <Amostra regra={r} />
             <div>
               <strong>{r.descricao}</strong>
-              <div className="suave pequeno">{resumoCondicao(r)}</div>
+              <div className="suave pequeno">{resumoCondicao(r, textosConfig, rotulos)}</div>
             </div>
             <button
               className="icone icone-perigo"
-              aria-label={`Remover a regra ${r.descricao}`}
-              onClick={() => void salvar({ versao: 1, regras: estilo.regras.filter((_, j) => j !== i) }, 'Regra removida.')}
+              aria-label={t.removerRegra(r.descricao)}
+              onClick={() => void salvar({ versao: 1, regras: estilo.regras.filter((_, j) => j !== i) }, t.regraRemovida)}
             >
               ✕
             </button>
@@ -247,42 +236,42 @@ function SecaoEstilo() {
         ))}
       </ol>
       <div className="nova-regra">
-        <select className="entrada" value={alvo} onChange={(e) => setAlvo(e.target.value)} aria-label="Etapas da regra">
-          <optgroup label="Família">
-            {Object.entries(NOMES_FAMILIA).map(([f, nome]) => (
+        <select className="entrada" value={alvo} onChange={(e) => setAlvo(e.target.value)} aria-label={t.etapasDaRegra}>
+          <optgroup label={t.familia}>
+            {Object.entries(textosConfig.familias).map(([f, nome]) => (
               <option key={f} value={`familia:${f}`}>
                 {nome}
               </option>
             ))}
           </optgroup>
-          {GRUPOS_TIPO.map((g) => (
+          {gruposTipo(idioma).map((g) => (
             <optgroup key={g.grupo} label={g.grupo}>
-              {g.tipos.map((t) => (
-                <option key={t} value={`tipo:${t}`}>
-                  {ROTULOS_TIPO[t]}
+              {g.tipos.map((tipo) => (
+                <option key={tipo} value={`tipo:${tipo}`}>
+                  {rotulos[tipo]}
                 </option>
               ))}
             </optgroup>
           ))}
         </select>
         <label className="campo-cor">
-          Fundo <input type="color" value={fundo} onChange={(e) => setFundo(e.target.value)} />
+          {t.fundo} <input type="color" value={fundo} onChange={(e) => setFundo(e.target.value)} />
         </label>
         <label className="campo-cor">
-          Borda <input type="color" value={borda} onChange={(e) => setBorda(e.target.value)} />
+          {t.borda} <input type="color" value={borda} onChange={(e) => setBorda(e.target.value)} />
         </label>
         <button className="botao" onClick={adicionar} disabled={!estilo}>
-          + Regra
+          {t.novaRegra}
         </button>
-        <button className="botao botao-primario" onClick={() => void aprender()} disabled={aprendendo} title="O agente Visual lê as cores que você aplicou nos desenhos e propõe regras">
-          {aprendendo ? 'Aprendendo…' : 'Aprender com minhas correções'}
+        <button className="botao botao-primario" onClick={() => void aprender()} disabled={aprendendo} title={t.aprenderDica}>
+          {aprendendo ? t.aprendendo : t.aprender}
         </button>
       </div>
       {proposta && (
         <div className="proposta">
-          <strong>Proposta do agente Visual</strong>
-          <span className="suave pequeno">Tirada de {proposta.exemplos} etapas que você pintou.</span>
-          {proposta.estilo.regras.length === 0 && <p className="pequeno">Nenhuma regra: não achou padrão.</p>}
+          <strong>{t.proposta}</strong>
+          <span className="suave pequeno">{t.tiradaDe(proposta.exemplos)}</span>
+          {proposta.estilo.regras.length === 0 && <p className="pequeno">{t.semPadrao}</p>}
           <ol className="lista-regras">
             {proposta.estilo.regras.map((r, i) => (
               <li key={i}>
@@ -290,7 +279,8 @@ function SecaoEstilo() {
                 <div>
                   <strong>{r.descricao}</strong>
                   <div className="suave pequeno">
-                    {resumoCondicao(r)} · acerta {proposta.cobertura[i]?.acerta ?? 0} de {proposta.cobertura[i]?.vale ?? 0} exemplos
+                    {resumoCondicao(r, textosConfig, rotulos)}
+                    {t.acerta(proposta.cobertura[i]?.acerta ?? 0, proposta.cobertura[i]?.vale ?? 0)}
                   </div>
                 </div>
               </li>
@@ -308,14 +298,14 @@ function SecaoEstilo() {
               className="botao botao-primario"
               disabled={!proposta.estilo.regras.length}
               onClick={() => {
-                void salvar(proposta.estilo, 'Estilo atualizado.');
+                void salvar(proposta.estilo, t.estiloAtualizado);
                 setProposta(null);
               }}
             >
-              Usar este estilo
+              {t.usar}
             </button>
             <button className="botao" onClick={() => setProposta(null)}>
-              Descartar
+              {t.descartar}
             </button>
           </div>
         </div>
@@ -326,6 +316,7 @@ function SecaoEstilo() {
 
 function ItemProvedor({ provedor: p, aoMudar }: { provedor: Provedor; aoMudar: () => void }) {
   const avisar = useAvisos();
+  const t = useTextos().config.provedor;
   const [modeloTeste, setModeloTeste] = useState(p.tipo === 'anthropic' ? 'claude-opus-5-5' : '');
   const [testando, setTestando] = useState(false);
   const [novaChave, setNovaChave] = useState<string | null>(null);
@@ -334,8 +325,8 @@ function ItemProvedor({ provedor: p, aoMudar }: { provedor: Provedor; aoMudar: (
     setTestando(true);
     try {
       const r = await apiIa.testarProvedor(p.id, modeloTeste);
-      if (r.ok) avisar(`Funcionou: ${modeloTeste} respondeu em ${(r.ms / 1000).toFixed(1)} s. ${formatarCusto(r.uso?.custo)}`.trim(), 'sucesso');
-      else avisar(`Não funcionou: ${r.erro ?? 'resposta inesperada'}`, 'erro');
+      if (r.ok) avisar(t.funcionou(modeloTeste, (r.ms / 1000).toFixed(1), formatarCusto(r.uso?.custo)).trim(), 'sucesso');
+      else avisar(t.naoFuncionou(r.erro ?? t.respostaInesperada), 'erro');
     } catch (e) {
       avisar(mensagemDe(e), 'erro', e instanceof ErroApi ? e.detalhes : undefined);
     } finally {
@@ -349,22 +340,22 @@ function ItemProvedor({ provedor: p, aoMudar }: { provedor: Provedor; aoMudar: (
         <strong>{p.nome}</strong>
         <span className="suave pequeno mono">{p.urlBase}</span>
         <span className="pequeno">
-          {p.tipo === 'anthropic' ? 'API da Anthropic' : 'Compatível com OpenAI'} ·{' '}
-          {p.temChave ? <span className="mono">chave ••••{p.finalChave}</span> : <span className="suave">sem chave</span>}
+          {p.tipo === 'anthropic' ? t.tipoAnthropic : t.tipoOpenai} ·{' '}
+          {p.temChave ? <span className="mono">{t.chave(p.finalChave ?? '')}</span> : <span className="suave">{t.semChave}</span>}
         </span>
       </div>
       <div className="provedor-acoes">
-        <input className="entrada entrada-curta" placeholder="modelo para testar" value={modeloTeste} onChange={(e) => setModeloTeste(e.target.value)} aria-label="Modelo para testar" />
+        <input className="entrada entrada-curta" placeholder={t.modeloParaTestar} value={modeloTeste} onChange={(e) => setModeloTeste(e.target.value)} aria-label={t.modeloParaTestarRotulo} />
         <button className="botao" onClick={() => void testar()} disabled={testando || !modeloTeste.trim()}>
-          {testando ? 'Testando…' : 'Testar'}
+          {testando ? t.testando : t.testar}
         </button>
         {novaChave === null ? (
           <button className="botao" onClick={() => setNovaChave('')}>
-            {p.temChave ? 'Trocar chave' : 'Pôr chave'}
+            {p.temChave ? t.trocarChave : t.porChave}
           </button>
         ) : (
           <>
-            <input className="entrada entrada-curta" type="password" autoComplete="off" placeholder="nova chave" value={novaChave} onChange={(e) => setNovaChave(e.target.value)} aria-label="Nova chave" />
+            <input className="entrada entrada-curta" type="password" autoComplete="off" placeholder={t.novaChave} value={novaChave} onChange={(e) => setNovaChave(e.target.value)} aria-label={t.novaChaveRotulo} />
             <button
               className="botao botao-primario"
               disabled={!novaChave.trim()}
@@ -372,29 +363,29 @@ function ItemProvedor({ provedor: p, aoMudar }: { provedor: Provedor; aoMudar: (
                 try {
                   await apiIa.editarProvedor(p.id, { chave: novaChave.trim() });
                   setNovaChave(null);
-                  avisar('Chave trocada.', 'sucesso');
+                  avisar(t.chaveTrocada, 'sucesso');
                   aoMudar();
                 } catch (e) {
                   avisar(mensagemDe(e), 'erro');
                 }
               }}
             >
-              Salvar
+              {t.salvar}
             </button>
             <button className="botao" onClick={() => setNovaChave(null)}>
-              Cancelar
+              {t.cancelar}
             </button>
           </>
         )}
         <button
           className="botao botao-fantasma botao-perigo"
           onClick={async () => {
-            if (!window.confirm(`Remover "${p.nome}"? Os agentes que usam este provedor ficam sem modelo.`)) return;
+            if (!window.confirm(t.confirmarRemover(p.nome))) return;
             await apiIa.apagarProvedor(p.id);
             aoMudar();
           }}
         >
-          Remover
+          {t.remover}
         </button>
       </div>
     </li>
@@ -403,16 +394,18 @@ function ItemProvedor({ provedor: p, aoMudar }: { provedor: Provedor; aoMudar: (
 
 function NovoProvedor({ aoCriar }: { aoCriar: () => void }) {
   const avisar = useAvisos();
+  const t = useTextos().config.novoProvedor;
+  const nomeDe = (p: Predefinido) => p.nome ?? t.outro;
   const [aberto, setAberto] = useState(false);
   const [indice, setIndice] = useState(0);
   const pre = PREDEFINIDOS[indice]!;
-  const [nome, setNome] = useState(pre.nome);
+  const [nome, setNome] = useState(nomeDe(pre));
   const [urlBase, setUrlBase] = useState(pre.urlBase);
   const [chave, setChave] = useState('');
 
   const escolher = (i: number) => {
     setIndice(i);
-    setNome(PREDEFINIDOS[i]!.nome);
+    setNome(nomeDe(PREDEFINIDOS[i]!));
     setUrlBase(PREDEFINIDOS[i]!.urlBase);
   };
 
@@ -420,7 +413,7 @@ function NovoProvedor({ aoCriar }: { aoCriar: () => void }) {
     e.preventDefault();
     try {
       await apiIa.criarProvedor({ nome, tipo: pre.tipo, urlBase, ...(chave.trim() ? { chave: chave.trim() } : {}) });
-      avisar(`${nome} cadastrado. Agora escolha o modelo dos agentes abaixo.`, 'sucesso');
+      avisar(t.cadastrado(nome), 'sucesso');
       setChave('');
       setAberto(false);
       aoCriar();
@@ -432,41 +425,41 @@ function NovoProvedor({ aoCriar }: { aoCriar: () => void }) {
   if (!aberto) {
     return (
       <button className="botao botao-fantasma" onClick={() => setAberto(true)}>
-        + Provedor
+        {t.abrir}
       </button>
     );
   }
   return (
     <form className="novo-provedor" onSubmit={(e) => void salvar(e)}>
       <label className="campo">
-        <span>Provedor</span>
+        <span>{t.provedor}</span>
         <select className="entrada" value={indice} onChange={(e) => escolher(Number(e.target.value))}>
           {PREDEFINIDOS.map((p, i) => (
-            <option key={p.nome} value={i}>
-              {p.nome}
+            <option key={i} value={i}>
+              {nomeDe(p)}
             </option>
           ))}
         </select>
-        {pre.dica && <span className="suave pequeno">{pre.dica}</span>}
+        {pre.dica && <span className="suave pequeno">{t.dicas[pre.dica]}</span>}
       </label>
       <label className="campo">
-        <span>Nome</span>
+        <span>{t.nome}</span>
         <input className="entrada" value={nome} onChange={(e) => setNome(e.target.value)} required />
       </label>
       <label className="campo">
-        <span>URL base</span>
+        <span>{t.urlBase}</span>
         <input className="entrada mono" value={urlBase} onChange={(e) => setUrlBase(e.target.value)} required />
       </label>
       <label className="campo">
-        <span>Chave de API {pre.pedeChave ? '' : '(opcional)'}</span>
+        <span>{t.chave(!pre.pedeChave)}</span>
         <input className="entrada" type="password" autoComplete="off" value={chave} onChange={(e) => setChave(e.target.value)} required={pre.pedeChave} />
       </label>
       <div className="dialogo-acoes">
         <button type="button" className="botao" onClick={() => setAberto(false)}>
-          Cancelar
+          {t.cancelar}
         </button>
         <button type="submit" className="botao botao-primario">
-          Cadastrar
+          {t.cadastrar}
         </button>
       </div>
     </form>
@@ -483,6 +476,8 @@ interface PropsLinhaAgente {
 }
 
 function LinhaAgente({ config, descricao, provedores, modelos, aoListarModelos, aoSalvar }: PropsLinhaAgente) {
+  const textosConfig = useTextos().config;
+  const t = textosConfig.modelos;
   const [c, setC] = useState(config);
   const [ultimo, setUltimo] = useState(config);
   if (config !== ultimo) {
@@ -493,20 +488,21 @@ function LinhaAgente({ config, descricao, provedores, modelos, aoListarModelos, 
   const sujo = JSON.stringify(c) !== JSON.stringify(config);
   const lista = `modelos-${c.agente}`;
   const ehPadrao = c.agente === 'padrao';
+  const nomeAgente = textosConfig.agentes[c.agente];
 
   return (
     <div className="linha-agente">
       <div className="linha-agente-nome">
-        <strong>{NOMES_AGENTE[c.agente]}</strong>
+        <strong>{nomeAgente}</strong>
         <span className="suave pequeno">{descricao}</span>
       </div>
       <select
         className="entrada"
         value={c.provedorId ?? ''}
-        aria-label={`Provedor do agente ${NOMES_AGENTE[c.agente]}`}
+        aria-label={t.provedorDoAgente(nomeAgente)}
         onChange={(e) => setC({ ...c, provedorId: e.target.value || null, esforco: null })}
       >
-        <option value="">{ehPadrao ? 'Escolha um provedor' : 'Usar o padrão'}</option>
+        <option value="">{ehPadrao ? t.escolhaProvedor : t.usarPadrao}</option>
         {provedores.map((p) => (
           <option key={p.id} value={p.id}>
             {p.nome}
@@ -516,12 +512,12 @@ function LinhaAgente({ config, descricao, provedores, modelos, aoListarModelos, 
       <input
         className="entrada mono"
         list={lista}
-        placeholder={provedor?.tipo === 'anthropic' ? 'claude-opus-5-5' : 'id do modelo'}
+        placeholder={provedor?.tipo === 'anthropic' ? 'claude-opus-5-5' : t.idDoModelo}
         value={c.modelo}
         disabled={!c.provedorId}
         onFocus={() => c.provedorId && aoListarModelos(c.provedorId)}
         onChange={(e) => setC({ ...c, modelo: e.target.value })}
-        aria-label={`Modelo do agente ${NOMES_AGENTE[c.agente]}`}
+        aria-label={t.modeloDoAgente(nomeAgente)}
       />
       <datalist id={lista}>
         {modelos?.map((m) => (
@@ -532,18 +528,18 @@ function LinhaAgente({ config, descricao, provedores, modelos, aoListarModelos, 
         className="entrada"
         value={c.esforco ?? ''}
         disabled={provedor?.tipo !== 'anthropic'}
-        title={provedor?.tipo === 'anthropic' ? 'Quanto o modelo pensa antes de responder' : 'Só para modelos Claude'}
+        title={provedor?.tipo === 'anthropic' ? t.esforcoDica : t.esforcoSoClaude}
         onChange={(e) => setC({ ...c, esforco: (e.target.value || null) as Esforco | null })}
-        aria-label="Esforço"
+        aria-label={t.esforco}
       >
-        {ESFORCOS.map((e) => (
-          <option key={e.valor} value={e.valor}>
-            {e.nome}
+        {ESFORCOS.map((valor) => (
+          <option key={valor} value={valor}>
+            {t.esforcos[valor || 'padrao']}
           </option>
         ))}
       </select>
       <button className="botao botao-primario" disabled={!sujo || (Boolean(c.provedorId) && !c.modelo.trim())} onClick={() => void aoSalvar(c)}>
-        Salvar
+        {t.salvar}
       </button>
     </div>
   );

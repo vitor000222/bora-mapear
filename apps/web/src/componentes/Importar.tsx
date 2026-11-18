@@ -1,12 +1,14 @@
 import { useState, type FormEvent, type RefObject } from 'react';
 import { apiIa, ErroApi } from '../api.ts';
 import { useAvisos } from '../avisos.tsx';
+import { useTextos } from '../i18n/index.tsx';
 
 const ACEITOS = '.bpmn,.xml,.mmd,.mermaid,.csv,.md,.txt,.puml,.plantuml';
 
 /** Importar um processo de outra ferramenta: BPMN e Mermaid sem IA; o resto, pelo Conversor. */
 export function Importar({ dialogo }: { dialogo: RefObject<HTMLDialogElement | null> }) {
   const avisar = useAvisos();
+  const t = useTextos().lista.importar;
   const [nome, setNome] = useState('');
   const [conteudo, setConteudo] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -30,8 +32,8 @@ export function Importar({ dialogo }: { dialogo: RefObject<HTMLDialogElement | n
     try {
       const r = await apiIa.importar(nome.trim(), conteudo);
       fechar();
-      if (r.avisos.length) avisar('Importado, com avisos:', 'info', r.avisos);
-      else avisar('Importado.', 'sucesso');
+      if (r.avisos.length) avisar(t.importadoComAvisos, 'info', r.avisos);
+      else avisar(t.importado, 'sucesso');
       window.location.hash = `#/m/${r.mapeamento.id}`;
     } catch (erro) {
       if (erro instanceof ErroApi && erro.extra['podeUsarIa']) setOfereceIa(erro.message);
@@ -46,7 +48,7 @@ export function Importar({ dialogo }: { dialogo: RefObject<HTMLDialogElement | n
     try {
       const r = await apiIa.importarComIa(nome.trim(), conteudo);
       fechar();
-      avisar('O Conversor está trabalhando. A proposta aparece na aba IA.', 'info');
+      avisar(t.conversorTrabalhando, 'info');
       window.location.hash = `#/m/${r.mapeamento.id}/ia`;
     } catch (erro) {
       avisar(erro instanceof Error ? erro.message : String(erro), 'erro');
@@ -58,17 +60,14 @@ export function Importar({ dialogo }: { dialogo: RefObject<HTMLDialogElement | n
   return (
     <dialog ref={dialogo} className="dialogo" aria-labelledby="titulo-importar">
       <form onSubmit={(e) => void importar(e)}>
-        <h2 id="titulo-importar">Importar processo</h2>
-        <p className="suave pequeno">
-          BPMN 2.0 (Camunda, bpmn.io, Bizagi, o próprio Bora Mapear), fluxograma Mermaid e a matriz em CSV entram direto, sem IA. Outro formato (PlantUML, lista de passos, tabela) passa
-          pelo Conversor.
-        </p>
+        <h2 id="titulo-importar">{t.titulo}</h2>
+        <p className="suave pequeno">{t.explicacao}</p>
         <label className="campo">
-          <span>Arquivo</span>
+          <span>{t.arquivo}</span>
           <input type="file" accept={ACEITOS} onChange={(e) => void lerArquivo(e.target.files?.[0])} />
         </label>
         <label className="campo">
-          <span>Ou cole o conteúdo</span>
+          <span>{t.colar}</span>
           <textarea
             className="entrada mono"
             rows={8}
@@ -77,27 +76,27 @@ export function Importar({ dialogo }: { dialogo: RefObject<HTMLDialogElement | n
               setConteudo(e.target.value);
               setOfereceIa(null);
             }}
-            placeholder={'flowchart LR\n  A([Início]) --> B[Receber pedido] --> C([Fim])'}
+            placeholder={t.colarExemplo}
           />
         </label>
         <label className="campo">
-          <span>Nome do mapeamento</span>
+          <span>{t.nome}</span>
           <input className="entrada" value={nome} onChange={(e) => setNome(e.target.value)} required />
         </label>
         {ofereceIa && (
           <div className="faixa-info">
             <p>{ofereceIa}</p>
             <button type="button" className="botao botao-primario" onClick={() => void comIa()} disabled={enviando}>
-              Converter com IA
+              {t.comIa}
             </button>
           </div>
         )}
         <div className="dialogo-acoes">
           <button type="button" className="botao" onClick={fechar}>
-            Cancelar
+            {t.cancelar}
           </button>
           <button type="submit" className="botao botao-primario" disabled={enviando || !nome.trim() || !conteudo.trim()}>
-            {enviando ? 'Importando…' : 'Importar'}
+            {enviando ? t.importando : t.importar}
           </button>
         </div>
       </form>

@@ -2,27 +2,7 @@ import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import type { Matriz, ResultadoValidacao } from '@bora-mapear/core';
 import { apiIa, ErroApi, formatarCusto, formatarData, formatarTokens, type Evidencia, type Execucao, type Fonte } from '../api.ts';
 import { useAvisos } from '../avisos.tsx';
-
-const ROTULOS_SOBRE: Record<string, string> = {
-  etapa: 'Etapa',
-  decisao: 'Decisão',
-  ator: 'Quem faz',
-  sistema: 'Sistema',
-  documento: 'Documento',
-  regra: 'Regra',
-  espera: 'Espera',
-  problema: 'Problema',
-  volume: 'Volume',
-  outro: 'Outro',
-};
-
-const NOMES_EXECUCAO: Record<Execucao['tipo'], string> = {
-  ler: 'Leitor',
-  mapear: 'Mapeador',
-  revisar: 'Revisor',
-  editar: 'Editor',
-  converter: 'Conversor',
-};
+import { localDoIdioma, textos, useTextos } from '../i18n/index.tsx';
 
 const ACEITOS = '.pdf,.docx,.txt,.md,.csv,.vtt,.srt';
 
@@ -39,6 +19,7 @@ const mensagemDe = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function AbaIa({ id, versaoAtual, aoRevisarProposta, aoAplicar }: Props) {
   const avisar = useAvisos();
+  const t = useTextos().ia;
   const [fontes, setFontes] = useState<Fonte[]>([]);
   const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
   const [execucoes, setExecucoes] = useState<Execucao[]>([]);
@@ -75,9 +56,11 @@ export function AbaIa({ id, versaoAtual, aoRevisarProposta, aoAplicar }: Props) 
         setExecucoes(lista);
         const terminadas = lista.filter((x) => x.status !== 'rodando' && rodandoAntes.current.has(x.id));
         if (terminadas.length) {
-          for (const t of terminadas) {
-            if (t.status === 'falhou') avisar(`${NOMES_EXECUCAO[t.tipo]} falhou: ${t.erro ?? ''}`, 'erro');
-            else avisar(`${NOMES_EXECUCAO[t.tipo]} terminou.`, 'sucesso');
+          // Lido a cada volta, e não do `t` do render, para seguir uma troca de idioma.
+          const tx = textos().ia;
+          for (const x of terminadas) {
+            if (x.status === 'falhou') avisar(tx.avisos.falhou(tx.agentes[x.tipo], x.erro ?? ''), 'erro');
+            else avisar(tx.avisos.terminou(tx.agentes[x.tipo]), 'sucesso');
           }
           const [f, e] = await Promise.all([apiIa.fontes(id), apiIa.evidencias(id)]);
           setFontes(f);
@@ -108,7 +91,7 @@ export function AbaIa({ id, versaoAtual, aoRevisarProposta, aoAplicar }: Props) 
     if (!arquivos.length) return;
     try {
       const novas = await apiIa.enviarArquivos(id, arquivos);
-      avisar(`${novas.length} ${novas.length === 1 ? 'fonte enviada' : 'fontes enviadas'}.`, 'sucesso');
+      avisar(t.avisos.fontesEnviadas(novas.length), 'sucesso');
     } catch (e) {
       avisar(mensagemDe(e), 'erro', e instanceof ErroApi ? e.detalhes : undefined);
     }
@@ -121,7 +104,9 @@ export function AbaIa({ id, versaoAtual, aoRevisarProposta, aoAplicar }: Props) 
     <div className="aba-ia">
       {configurado === false && (
         <div className="faixa-info">
-          Os agentes usam a sua chave de API. <a href="#/config">Cadastre um provedor e escolha o modelo padrão</a> antes de rodar.
+          {t.semChave.antes}
+          <a href="#/config">{t.semChave.link}</a>
+          {t.semChave.depois}
         </div>
       )}
 
@@ -137,36 +122,33 @@ export function AbaIa({ id, versaoAtual, aoRevisarProposta, aoAplicar }: Props) 
 
           <div className="cartao secao">
             <div className="secao-cabecalho">
-              <h2>Agentes</h2>
-              <span className="suave pequeno">Cada um devolve uma proposta. Nada muda na matriz sem você aplicar.</span>
+              <h2>{t.agentesSecao.titulo}</h2>
+              <span className="suave pequeno">{t.agentesSecao.subtitulo}</span>
             </div>
             <div className="acao-agente">
               <div>
-                <strong>Mapear</strong>
-                <p className="suave pequeno">
-                  {pendentes ? `Lê ${pendentes === 1 ? 'a fonte nova' : `as ${pendentes} fontes novas`} e ` : ''}
-                  escreve a matriz a partir {evidencias.length || pendentes ? 'das evidências' : 'das fontes'}. Passa pelo portão e corrige sozinho até três vezes.
-                </p>
+                <strong>{t.agentesSecao.mapear.titulo}</strong>
+                <p className="suave pequeno">{t.agentesSecao.mapear.descricao(pendentes, Boolean(evidencias.length || pendentes))}</p>
                 <textarea
                   className="entrada"
                   rows={2}
-                  placeholder="Instruções (opcional): ex. só o fluxo de venda, sem o pós-venda; raias por área."
+                  placeholder={t.agentesSecao.mapear.instrucoes}
                   value={instrucoes}
                   onChange={(e) => setInstrucoes(e.target.value)}
                 />
               </div>
               <button className="botao botao-primario" disabled={enviando || rodando || (!evidencias.length && !pendentes)} onClick={() => void disparar(() => apiIa.mapear(id, instrucoes))}>
-                Mapear
+                {t.agentesSecao.mapear.botao}
               </button>
             </div>
             <div className="acao-agente">
               <div>
-                <strong>Pedir mudança</strong>
-                <p className="suave pequeno">Diga em português o que mudar. O Editor devolve as operações e a matriz nova.</p>
+                <strong>{t.agentesSecao.editar.titulo}</strong>
+                <p className="suave pequeno">{t.agentesSecao.editar.descricao}</p>
                 <textarea
                   className="entrada"
                   rows={2}
-                  placeholder="Ex.: depois de analisar o crédito, a gerência aprova pedidos acima de R$ 50 mil."
+                  placeholder={t.agentesSecao.editar.exemplo}
                   value={pedido}
                   onChange={(e) => setPedido(e.target.value)}
                 />
@@ -182,23 +164,23 @@ export function AbaIa({ id, versaoAtual, aoRevisarProposta, aoAplicar }: Props) 
                   })
                 }
               >
-                Propor
+                {t.agentesSecao.editar.botao}
               </button>
             </div>
             <div className="acao-agente">
               <div>
-                <strong>Revisar</strong>
-                <p className="suave pequeno">Aponta lacunas, com a pergunta para fazer ao cliente, e linhas que pedem olho humano.</p>
+                <strong>{t.agentesSecao.revisar.titulo}</strong>
+                <p className="suave pequeno">{t.agentesSecao.revisar.descricao}</p>
               </div>
               <button className="botao" disabled={enviando || rodando} onClick={() => void disparar(() => apiIa.revisar(id))}>
-                Revisar a v{versaoAtual}
+                {t.agentesSecao.revisar.botao(versaoAtual)}
               </button>
             </div>
           </div>
 
           <div className="cartao secao">
-            <h2>Execuções</h2>
-            {!execucoes.length && <p className="suave">Nenhuma ainda.</p>}
+            <h2>{t.execucoes.titulo}</h2>
+            {!execucoes.length && <p className="suave">{t.execucoes.nenhuma}</p>}
             <ol className="lista-execucoes">
               {execucoes.map((x) => (
                 <ItemExecucao
@@ -209,13 +191,13 @@ export function AbaIa({ id, versaoAtual, aoRevisarProposta, aoAplicar }: Props) 
                   aoAplicar={async (forcar) => {
                     try {
                       const r = await apiIa.aplicar(x.id, forcar);
-                      avisar(`A proposta virou a versão ${r.versao.numero}.`, 'sucesso');
+                      avisar(t.avisos.propostaAplicada(r.versao.numero), 'sucesso');
                       setExecucoes(await apiIa.execucoes(id));
                       await aoAplicar();
                     } catch (e) {
-                      if (e instanceof ErroApi && e.status === 409 && !forcar && window.confirm(`${e.message}\n\nAplicar mesmo assim?`)) {
+                      if (e instanceof ErroApi && e.status === 409 && !forcar && window.confirm(t.avisos.aplicarMesmoAssim(e.message))) {
                         const r = await apiIa.aplicar(x.id, true);
-                        avisar(`A proposta virou a versão ${r.versao.numero}.`, 'sucesso');
+                        avisar(t.avisos.propostaAplicada(r.versao.numero), 'sucesso');
                         setExecucoes(await apiIa.execucoes(id));
                         await aoAplicar();
                       } else if (!(e instanceof ErroApi && e.status === 409 && !forcar)) {
@@ -249,10 +231,11 @@ function Fontes({
   aoLerDeNovo: (fonteId: string) => void;
 }) {
   const avisar = useAvisos();
+  const t = useTextos().ia.fontes;
   const entrada = useRef<HTMLInputElement>(null);
   const [arrastando, setArrastando] = useState(false);
   const [colando, setColando] = useState(false);
-  const [nomeColado, setNomeColado] = useState('Anotações');
+  const [nomeColado, setNomeColado] = useState(t.nomePadrao);
   const [textoColado, setTextoColado] = useState('');
   const [aberta, setAberta] = useState<{ id: string; texto: string } | null>(null);
 
@@ -265,8 +248,8 @@ function Fontes({
   return (
     <div className="cartao secao">
       <div className="secao-cabecalho">
-        <h2>Fontes</h2>
-        <span className="suave pequeno">POPs, documentos e transcrições: PDF, DOCX, TXT, MD, VTT, SRT.</span>
+        <h2>{t.titulo}</h2>
+        <span className="suave pequeno">{t.subtitulo}</span>
       </div>
       <div
         className={`zona-envio ${arrastando ? 'zona-ativa' : ''}`}
@@ -277,12 +260,12 @@ function Fontes({
         onDragLeave={() => setArrastando(false)}
         onDrop={soltar}
       >
-        <span>Arraste arquivos aqui ou</span>
+        <span>{t.arraste}</span>
         <button className="botao" onClick={() => entrada.current?.click()}>
-          Escolher arquivos
+          {t.escolher}
         </button>
         <button className="botao botao-fantasma" onClick={() => setColando((v) => !v)}>
-          {colando ? 'Fechar' : 'Colar texto'}
+          {colando ? t.fechar : t.colarTexto}
         </button>
         <input
           ref={entrada}
@@ -298,8 +281,8 @@ function Fontes({
       </div>
       {colando && (
         <div className="colar">
-          <input className="entrada" value={nomeColado} onChange={(e) => setNomeColado(e.target.value)} aria-label="Nome da fonte" />
-          <textarea className="entrada" rows={6} placeholder="Cole aqui anotações, a descrição do processo ou um trecho de transcrição." value={textoColado} onChange={(e) => setTextoColado(e.target.value)} />
+          <input className="entrada" value={nomeColado} onChange={(e) => setNomeColado(e.target.value)} aria-label={t.nomeDaFonte} />
+          <textarea className="entrada" rows={6} placeholder={t.colarAqui} value={textoColado} onChange={(e) => setTextoColado(e.target.value)} />
           <button
             className="botao botao-primario"
             disabled={!textoColado.trim() || !nomeColado.trim()}
@@ -308,14 +291,14 @@ function Fontes({
                 await apiIa.colarTexto(id, nomeColado.trim(), textoColado);
                 setTextoColado('');
                 setColando(false);
-                avisar('Texto adicionado como fonte.', 'sucesso');
+                avisar(t.textoAdicionado, 'sucesso');
                 await aoMudar();
               } catch (e) {
                 avisar(mensagemDe(e), 'erro');
               }
             }}
           >
-            Adicionar fonte
+            {t.adicionar}
           </button>
         </div>
       )}
@@ -323,10 +306,10 @@ function Fontes({
         <table className="tabela">
           <thead>
             <tr>
-              <th>Arquivo</th>
-              <th className="num">Tamanho</th>
-              <th className="num">Evidências</th>
-              <th aria-label="Ações" />
+              <th>{t.colunas.arquivo}</th>
+              <th className="num">{t.colunas.tamanho}</th>
+              <th className="num">{t.colunas.evidencias}</th>
+              <th aria-label={t.colunas.acoes} />
             </tr>
           </thead>
           <tbody>
@@ -340,27 +323,27 @@ function Fontes({
                     {f.nome}
                   </button>
                   <div className="suave pequeno">
-                    {f.tipo.toUpperCase()} · {f.caracteres.toLocaleString('pt-BR')} caracteres
+                    {f.tipo.toUpperCase()} · {f.caracteres.toLocaleString(localDoIdioma())} {t.caracteres}
                   </div>
                   {aberta?.id === f.id && <pre className="texto-fonte">{aberta.texto}</pre>}
                 </td>
                 <td className="num suave">{f.tamanho >= 1024 ? `${Math.round(f.tamanho / 1024)} KB` : `${f.tamanho} B`}</td>
-                <td className="num">{f.evidencias ? f.evidencias : <span className="selo selo-aviso">não lida</span>}</td>
+                <td className="num">{f.evidencias ? f.evidencias : <span className="selo selo-aviso">{t.naoLida}</span>}</td>
                 <td className="acoes">
                   {f.evidencias > 0 && (
-                    <button className="botao botao-fantasma" onClick={() => aoLerDeNovo(f.id)} title="As evidências desta fonte são trocadas; as chaves antigas não voltam.">
-                      Ler de novo
+                    <button className="botao botao-fantasma" onClick={() => aoLerDeNovo(f.id)} title={t.lerDeNovoDica}>
+                      {t.lerDeNovo}
                     </button>
                   )}
                   <button
                     className="botao botao-fantasma botao-perigo"
                     onClick={async () => {
-                      if (!window.confirm(`Remover "${f.nome}" e as evidências tiradas dela?`)) return;
+                      if (!window.confirm(t.confirmarRemover(f.nome))) return;
                       await apiIa.apagarFonte(id, f.id);
                       await aoMudar();
                     }}
                   >
-                    Remover
+                    {t.remover}
                   </button>
                 </td>
               </tr>
@@ -373,29 +356,32 @@ function Fontes({
 }
 
 function Evidencias({ evidencias }: { evidencias: Evidencia[] }) {
+  const textosIa = useTextos().ia;
+  const t = textosIa.evidencias;
+  const rotulosSobre: Record<string, string> = textosIa.sobre;
   const [filtro, setFiltro] = useState('');
   const visiveis = filtro ? evidencias.filter((e) => `${e.chave} ${e.citacao} ${e.fonte}`.toLowerCase().includes(filtro.toLowerCase())) : evidencias;
   const naoConferidas = evidencias.filter((e) => !e.verificada).length;
   return (
-    <aside className="cartao secao painel-evidencias" aria-label="Evidências">
+    <aside className="cartao secao painel-evidencias" aria-label={t.titulo}>
       <div className="secao-cabecalho">
-        <h2>Evidências</h2>
+        <h2>{t.titulo}</h2>
         <span className="suave pequeno">
           {evidencias.length}
-          {naoConferidas ? ` · ${naoConferidas} não conferidas` : ''}
+          {naoConferidas ? t.naoConferidas(naoConferidas) : ''}
         </span>
       </div>
-      {!evidencias.length && <p className="suave pequeno">Rode o Leitor (ou o Mapear) para tirar das fontes os trechos que dizem como o processo funciona.</p>}
-      {evidencias.length > 8 && <input className="entrada" placeholder="Filtrar" value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label="Filtrar evidências" />}
+      {!evidencias.length && <p className="suave pequeno">{t.vazio}</p>}
+      {evidencias.length > 8 && <input className="entrada" placeholder={t.filtrar} value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label={t.filtrarRotulo} />}
       <ol className="lista-evidencias">
         {visiveis.map((e) => (
           <li key={e.chave} id={`ev-${e.chave}`}>
             <div className="evidencia-cabecalho">
               <code>{e.chave}</code>
-              <span className="selo">{ROTULOS_SOBRE[e.sobre] ?? e.sobre}</span>
+              <span className="selo">{rotulosSobre[e.sobre] ?? e.sobre}</span>
               {!e.verificada && (
-                <span className="selo selo-aviso" title="A citação não foi achada literalmente no texto da fonte.">
-                  não conferida
+                <span className="selo selo-aviso" title={t.naoConferidaDica}>
+                  {t.naoConferida}
                 </span>
               )}
             </div>
@@ -439,6 +425,8 @@ function ItemExecucao({
   aoRevisarProposta: (m: Matriz) => void;
   aoAplicar: (forcar: boolean) => Promise<void>;
 }) {
+  const textosIa = useTextos().ia;
+  const t = textosIa.execucoes;
   const [aberto, setAberto] = useState(x.status !== 'concluida' || x.aplicadaNaVersao === null);
   const duracao = x.concluidoEm ? Math.round((new Date(x.concluidoEm).getTime() - new Date(x.criadoEm).getTime()) / 1000) : null;
   const proposta = (x.tipo === 'mapear' || x.tipo === 'editar' || x.tipo === 'converter') && x.status === 'concluida' ? (x.saida as unknown as SaidaProposta) : null;
@@ -448,11 +436,9 @@ function ItemExecucao({
   return (
     <li className={`execucao execucao-${x.status}`}>
       <button className="execucao-cabecalho" onClick={() => setAberto((v) => !v)} aria-expanded={aberto}>
-        <strong>{NOMES_EXECUCAO[x.tipo]}</strong>
-        <span className={`selo ${x.status === 'concluida' ? 'selo-ok' : x.status === 'falhou' ? 'selo-erro' : 'selo-aviso'}`}>
-          {x.status === 'rodando' ? 'trabalhando…' : x.status === 'concluida' ? 'concluída' : 'falhou'}
-        </span>
-        {x.aplicadaNaVersao !== null && <span className="selo selo-bpmn">virou a v{x.aplicadaNaVersao}</span>}
+        <strong>{textosIa.agentes[x.tipo]}</strong>
+        <span className={`selo ${x.status === 'concluida' ? 'selo-ok' : x.status === 'falhou' ? 'selo-erro' : 'selo-aviso'}`}>{t.status[x.status]}</span>
+        {x.aplicadaNaVersao !== null && <span className="selo selo-bpmn">{t.virouVersao(x.aplicadaNaVersao)}</span>}
         <span className="suave pequeno">
           {formatarData(x.criadoEm)}
           {duracao !== null ? ` · ${duracao} s` : ''}
@@ -462,7 +448,11 @@ function ItemExecucao({
       </button>
       {aberto && (
         <div className="execucao-corpo">
-          {pedido && <p className="pequeno">Pedido: “{pedido}”</p>}
+          {pedido && (
+            <p className="pequeno">
+              {t.pedido} “{pedido}”
+            </p>
+          )}
           {x.log.length > 0 && (
             <ol className="log">
               {x.log.map((l, i) => (
@@ -474,10 +464,11 @@ function ItemExecucao({
           {proposta && (
             <div className="proposta">
               <p>
-                <strong>Proposta:</strong> {proposta.matriz.etapas.length} etapas, {proposta.matriz.raias.length} raias ·{' '}
-                {proposta.validacao.ok ? <span className="texto-ok">aprovada no portão</span> : <span className="texto-erro">o portão ainda acusa erros</span>}
-                {proposta.rodadas > 1 ? ` · ${proposta.rodadas} rodadas` : ''} · feita sobre a v{proposta.versaoBase}
-                {proposta.versaoBase !== versaoAtual ? ` (a atual é a v${versaoAtual})` : ''}
+                <strong>{t.proposta.rotulo}</strong> {t.proposta.tamanho(proposta.matriz.etapas.length, proposta.matriz.raias.length)} ·{' '}
+                {proposta.validacao.ok ? <span className="texto-ok">{t.proposta.aprovada}</span> : <span className="texto-erro">{t.proposta.reprovada}</span>}
+                {proposta.rodadas > 1 ? t.proposta.rodadas(proposta.rodadas) : ''}
+                {t.proposta.feitaSobre(proposta.versaoBase)}
+                {proposta.versaoBase !== versaoAtual ? t.proposta.atual(versaoAtual) : ''}
               </p>
               {proposta.resumo && <p className="pequeno">{proposta.resumo}</p>}
               {proposta.frases && (
@@ -497,10 +488,10 @@ function ItemExecucao({
               {x.aplicadaNaVersao === null && (
                 <div className="barra-visao-acoes">
                   <button className="botao" onClick={() => aoRevisarProposta(proposta.matriz)}>
-                    Revisar na Matriz
+                    {t.proposta.revisarNaMatriz}
                   </button>
                   <button className="botao botao-primario" onClick={() => void aoAplicar(false)}>
-                    Aplicar como v{versaoAtual + 1}
+                    {t.proposta.aplicarComo(versaoAtual + 1)}
                   </button>
                 </div>
               )}
@@ -511,7 +502,7 @@ function ItemExecucao({
               <p>{revisao.relatorio.resumo}</p>
               {revisao.relatorio.lacunas.length > 0 && (
                 <>
-                  <strong className="pequeno">Lacunas: perguntas para o cliente</strong>
+                  <strong className="pequeno">{t.revisao.lacunas}</strong>
                   <ul className="pequeno">
                     {revisao.relatorio.lacunas.map((l, i) => (
                       <li key={i}>
@@ -526,7 +517,7 @@ function ItemExecucao({
               )}
               {revisao.relatorio.revisar.length > 0 && (
                 <>
-                  <strong className="pequeno">Linhas para revisar</strong>
+                  <strong className="pequeno">{t.revisao.revisar}</strong>
                   <ul className="pequeno">
                     {revisao.relatorio.revisar.map((r) => (
                       <li key={r.chave}>
@@ -538,7 +529,7 @@ function ItemExecucao({
               )}
               {revisao.automaticos.length > 0 && (
                 <>
-                  <strong className="pequeno">Conferências automáticas</strong>
+                  <strong className="pequeno">{t.revisao.automaticos}</strong>
                   <ul className="pequeno">
                     {revisao.automaticos.map((a, i) => (
                       <li key={i}>{a}</li>

@@ -1,6 +1,8 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { IDIOMAS } from '@bora-mapear/core';
 import { ProvedorAvisos } from './avisos.tsx';
+import { NOMES_IDIOMA, ProvedorIdioma, useIdioma, useTextos, type Idioma } from './i18n/index.tsx';
 import { Lista } from './paginas/Lista.tsx';
 import { PaginaMapeamento } from './paginas/PaginaMapeamento.tsx';
 import { Configuracoes } from './paginas/Configuracoes.tsx';
@@ -20,8 +22,23 @@ function useHash(): string {
   return hash;
 }
 
+function SeletorIdioma() {
+  const { idioma, mudar } = useIdioma();
+  const t = useTextos();
+  return (
+    <select className="seletor-idioma" value={idioma} onChange={(e) => mudar(e.target.value as Idioma)} aria-label={t.comum.topo.idioma} title={t.comum.topo.idioma}>
+      {IDIOMAS.map((i) => (
+        <option key={i} value={i}>
+          {NOMES_IDIOMA[i]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function App() {
   const hash = useHash();
+  const t = useTextos().comum.topo;
   const rota = hash.match(/^#\/m\/([\w-]+)(?:\/(\w+))?/);
   const id = rota?.[1];
   const aba = rota?.[2];
@@ -32,17 +49,18 @@ function App() {
           <img src="/icone.svg" alt="" width={24} height={24} />
           <span>Bora Mapear</span>
         </a>
-        <span className="topo-lema">Uma matriz, várias linguagens.</span>
+        <span className="topo-lema">{t.lema}</span>
         <nav className="topo-nav">
           <a href="#/" aria-current={!id && hash !== '#/config' ? 'page' : undefined}>
-            Mapeamentos
+            {t.mapeamentos}
           </a>
           <a href="#/config" aria-current={hash === '#/config' ? 'page' : undefined}>
-            Configurações
+            {t.configuracoes}
           </a>
-          <a href={CODIGO_FONTE} target="_blank" rel="noreferrer" title="Código-fonte (AGPL-3.0)">
-            Código-fonte
+          <a href={CODIGO_FONTE} target="_blank" rel="noreferrer" title={t.codigoFonteTitulo}>
+            {t.codigoFonte}
           </a>
+          <SeletorIdioma />
         </nav>
       </header>
       <main className="conteudo">{id ? <PaginaMapeamento key={id} id={id} {...(aba ? { abaInicial: aba } : {})} /> : hash === '#/config' ? <Configuracoes /> : <Lista />}</main>
@@ -52,8 +70,10 @@ function App() {
 
 createRoot(document.getElementById('raiz')!).render(
   <StrictMode>
-    <ProvedorAvisos>
-      <App />
-    </ProvedorAvisos>
+    <ProvedorIdioma>
+      <ProvedorAvisos>
+        <App />
+      </ProvedorAvisos>
+    </ProvedorIdioma>
   </StrictMode>,
 );

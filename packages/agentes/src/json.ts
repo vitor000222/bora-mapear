@@ -1,8 +1,24 @@
 import { z } from 'zod';
+import type { Idioma } from '@bora-mapear/core';
 import { somarUso, USO_ZERO, type ClienteModelo, type Mensagem, type Uso } from './provedor.ts';
 
 /** Erro de um agente, com o que dá para fazer a respeito. */
 export class ErroAgente extends Error {}
+
+const MENSAGENS = {
+  pt: {
+    semJson: 'não há JSON na resposta',
+    raiz: '(raiz)',
+    cortada: 'A resposta do modelo foi cortada no limite de tokens. Aumente o limite do agente nas Configurações ou use um modelo com saída maior.',
+    foraDoFormato: (maximo: number, problema: string) => `O modelo não devolveu a resposta no formato pedido depois de ${maximo} tentativas:\n${problema}`,
+  },
+  en: {
+    semJson: 'there is no JSON in the response',
+    raiz: '(root)',
+    cortada: "The model's response was cut off at the token limit. Raise the agent's limit in Settings or use a model with a larger output.",
+    foraDoFormato: (maximo: number, problema: string) => `The model did not return the response in the requested format after ${maximo} attempts:\n${problema}`,
+  },
+} satisfies Record<Idioma, unknown>;
 
 const NAO_SUPORTADAS = new Set([
   '$schema',
@@ -38,7 +54,7 @@ export function schemaParaModelo(schema: z.ZodType): Record<string, unknown> {
 }
 
 /** Tira o JSON de uma resposta que pode vir com cerca de código ou texto em volta. */
-export function extrairJson(texto: string): unknown {
+export function extrairJson(texto: string, idioma: Idioma = 'pt'): unknown {
   const limpo = texto.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   try {
     return JSON.parse(limpo);
@@ -46,7 +62,7 @@ export function extrairJson(texto: string): unknown {
     const inicio = limpo.indexOf('{');
     const fim = limpo.lastIndexOf('}');
     if (inicio >= 0 && fim > inicio) return JSON.parse(limpo.slice(inicio, fim + 1));
-    throw new Error('não há JSON na resposta');
+    throw new Error(MENSAGENS[idioma].semJson);
   }
 }
 
@@ -74,6 +90,8 @@ export interface RespostaJson<T> {
  * ao modelo e pede de novo, até o número de tentativas.
  */
 export async function gerarJson<T extends z.ZodType>(cliente: ClienteModelo, pedido: PedidoJson<T>): Promise<RespostaJson<z.infer<T>>> {
+  const idioma = cliente.idioma ?? 'pt';
+  const t = MENSAGENS[idioma];
   const schemaJson = schemaParaModelo(pedido.schema);
   const sistema =
     `${pedido.sistema}\n\nResponda SOMENTE com um objeto JSON válido que siga este JSON Schema, sem texto antes ou depois:\n` +
@@ -92,21 +110,21 @@ export async function gerarJson<T extends z.ZodType>(cliente: ClienteModelo, ped
     });
     uso = somarUso(uso, resposta.uso);
     if (resposta.truncada) {
-      throw new ErroAgente('A resposta do modelo foi cortada no limite de tokens. Aumente o limite do agente nas Configurações ou use um modelo com saída maior.');
+      throw new ErroAgente(t.cortada);
     }
     let problema: string;
     try {
-      const r = pedido.schema.safeParse(extrairJson(resposta.texto));
+      const r = pedido.schema.safeParse(extrairJson(resposta.texto, idioma));
       if (r.success) return { dado: r.data, uso, texto: resposta.texto, mensagens: [...mensagens, { papel: 'assistant', texto: resposta.texto }] };
       problema = r.error.issues
         .slice(0, 20)
-        .map((i) => `- ${i.path.join('.') || '(raiz)'}: ${i.message}`)
+        .map((i) => `- ${i.path.join('.') || t.raiz}: ${i.message}`)
         .join('\n');
     } catch (erro) {
       problema = `- ${erro instanceof Error ? erro.message : String(erro)}`;
     }
     if (tentativa >= maximo) {
-      throw new ErroAgente(`O modelo não devolveu a resposta no formato pedido depois de ${maximo} tentativas:\n${problema}`);
+      throw new ErroAgente(t.foraDoFormato(maximo, problema));
     }
     mensagens.push(
       { papel: 'assistant', texto: resposta.texto },

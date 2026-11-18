@@ -1,4 +1,5 @@
 import { ErroAgente, ErroProvedor, somarUso, USO_ZERO, type Uso } from '@bora-mapear/agentes';
+import type { Idioma } from '@bora-mapear/core';
 import type { Execucao, Repositorio, TipoExecucao } from './repositorio.ts';
 
 export interface ContextoExecucao {
@@ -23,6 +24,7 @@ export class Executor {
     tipo: TipoExecucao,
     entrada: unknown,
     trabalho: (ctx: ContextoExecucao) => Promise<unknown>,
+    idioma: Idioma = 'pt',
   ): Promise<Execucao> {
     const execucao = await this.repo.criarExecucao(mapeamentoId, tipo, entrada);
     const log: string[] = [];
@@ -62,7 +64,7 @@ export class Executor {
         if (!conhecido) console.error(`Execução ${execucao.id} falhou:`, erro);
         await this.repo.atualizarExecucao(execucao.id, {
           status: 'falhou',
-          erro: conhecido ? erro.message : `Erro inesperado: ${erro instanceof Error ? erro.message : String(erro)}`,
+          erro: conhecido ? erro.message : `${idioma === 'en' ? 'Unexpected error' : 'Erro inesperado'}: ${erro instanceof Error ? erro.message : String(erro)}`,
           log,
           tokensEntrada: uso.tokensEntrada,
           tokensSaida: uso.tokensSaida,

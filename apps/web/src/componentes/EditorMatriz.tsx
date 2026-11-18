@@ -2,12 +2,13 @@ import { Fragment, useMemo, useRef, useState } from 'react';
 import {
   csvParaMatriz,
   ErroImportacao,
-  GRUPOS_TIPO,
+  gruposTipo,
   matrizParaCsv,
   MatrizSchema,
-  ROTULOS_TIPO,
+  rotulosTipo,
   validarMatriz,
   type Etapa,
+  type Idioma,
   type Matriz,
   type Problema,
   type Saida,
@@ -15,6 +16,7 @@ import {
 } from '@bora-mapear/core';
 import { baixar, type ResumoMapeamento } from '../api.ts';
 import { useAvisos } from '../avisos.tsx';
+import { useIdioma, useTextos, type Textos } from '../i18n/index.tsx';
 
 interface Props {
   matriz: Matriz;
@@ -70,32 +72,37 @@ function mover<T>(lista: T[], de: number, para: number): T[] {
 }
 
 /** Valida ao vivo: primeiro o formato (Zod), depois o portão. */
-function validarAoVivo(m: Matriz): { formato: string[]; problemas: Problema[] } {
+function validarAoVivo(m: Matriz, idioma: Idioma, t: Textos['matriz']): { formato: string[]; problemas: Problema[] } {
   const r = MatrizSchema.safeParse(m);
   if (!r.success) {
     return {
       formato: r.error.issues.map((i) => {
         const [lista, indice, campo] = i.path;
+        // O esquema escreve a regra de chave e id em português; em inglês, a mensagem vem do dicionário.
+        const mensagem = (i.code === 'invalid_format' && t.portao.formatoId) || i.message;
         if (lista === 'etapas' && typeof indice === 'number') {
-          return `Linha ${indice + 1} (${m.etapas[indice]?.chave ?? '?'}), ${String(campo ?? '')}: ${i.message}`;
+          return t.portao.linha(indice + 1, m.etapas[indice]?.chave ?? '?', String(campo ?? ''), mensagem);
         }
-        return `${i.path.join('.')}: ${i.message}`;
+        return `${i.path.join('.')}: ${mensagem}`;
       }),
       problemas: [],
     };
   }
-  return { formato: [], problemas: validarMatriz(r.data).problemas };
+  return { formato: [], problemas: validarMatriz(r.data, { idioma }).problemas };
 }
 
 export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescartar, aoSalvar, idMapeamento, mapeamentos, filhos, aoCriarFilho }: Props) {
   const avisar = useAvisos();
+  const { idioma } = useIdioma();
+  const t = useTextos().matriz;
+  const rotulos = rotulosTipo(idioma);
   const arquivoCsv = useRef<HTMLInputElement>(null);
   const [abertas, setAbertas] = useState<Set<string>>(new Set());
   const [mensagem, setMensagem] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [destaque, setDestaque] = useState<string | null>(null);
 
-  const { formato, problemas } = useMemo(() => validarAoVivo(m), [m]);
+  const { formato, problemas } = useMemo(() => validarAoVivo(m, idioma, t), [m, idioma, t]);
   const porChave = useMemo(() => {
     const mapa = new Map<string, Problema[]>();
     for (const p of problemas) if (p.chave) mapa.set(p.chave, [...(mapa.get(p.chave) ?? []), p]);
@@ -110,8 +117,8 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
   const renomearChave = (i: number, nova: string): string | null => {
     const antiga = m.etapas[i]!.chave;
     if (nova === antiga) return null;
-    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(nova)) return 'Comece com letra; use letras, números, _ e -.';
-    if (m.etapas.some((e) => e.chave === nova)) return `Já existe a chave ${nova}.`;
+    if (!/^[A-Za-z][A-Za-z0-9_-]*$/.test(nova)) return t.chave.formatoInvalido;
+    if (m.etapas.some((e) => e.chave === nova)) return t.chave.jaExiste(nova);
     etapas(
       m.etapas.map((e, j) => ({
         ...e,
@@ -145,7 +152,7 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
     });
 
   const salvar = async () => {
-    if (erros > 0 && !window.confirm(`A matriz tem ${erros} ${erros === 1 ? 'erro' : 'erros'} no portão. Salvar como rascunho mesmo assim?`)) return;
+    if (erros > 0 && !window.confirm(t.barra.confirmarRascunho(erros))) return;
     setSalvando(true);
     await aoSalvar(m, mensagem.trim());
     setMensagem('');
@@ -164,21 +171,21 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
     <div className="editor-matriz">
       <div className="barra-salvar cartao">
         <div className="barra-salvar-texto">
-          {sujo ? <strong>Mudanças não salvas</strong> : <span className="suave">Edite a matriz; o portão confere enquanto você digita.</span>}
+          {sujo ? <strong>{t.barra.naoSalvas}</strong> : <span className="suave">{t.barra.dica}</span>}
         </div>
         <input
           className="entrada"
-          placeholder="O que mudou? (opcional)"
+          placeholder={t.barra.mensagemPlaceholder}
           value={mensagem}
           onChange={(e) => setMensagem(e.target.value)}
           disabled={!sujo}
-          aria-label="Mensagem da versão"
+          aria-label={t.barra.mensagemRotulo}
         />
-        <button className="botao" onClick={() => baixar(`${m.processo.id}.csv`, matrizParaCsv(m), 'text/csv;charset=utf-8')} title="Abre no Excel e no Google Sheets">
-          Exportar CSV
+        <button className="botao" onClick={() => baixar(`${m.processo.id}.csv`, matrizParaCsv(m, { idioma }), 'text/csv;charset=utf-8')} title={t.barra.exportarCsvTitulo}>
+          {t.barra.exportarCsv}
         </button>
-        <button className="botao" onClick={() => arquivoCsv.current?.click()} title="Substitui a matriz pela da planilha, como rascunho">
-          Importar CSV
+        <button className="botao" onClick={() => arquivoCsv.current?.click()} title={t.barra.importarCsvTitulo}>
+          {t.barra.importarCsv}
         </button>
         <input
           ref={arquivoCsv}
@@ -190,33 +197,33 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
             ev.target.value = '';
             if (!arquivo) return;
             try {
-              const r = csvParaMatriz(await arquivo.text(), m.processo.nome);
+              const r = csvParaMatriz(await arquivo.text(), m.processo.nome, { idioma });
               aoMudar({ ...r.matriz, processo: m.processo });
-              avisar(`Planilha lida: ${r.matriz.etapas.length} etapas. Revise e salve a versão.`, r.avisos.length ? 'info' : 'sucesso', r.avisos);
+              avisar(t.barra.planilhaLida(r.matriz.etapas.length), r.avisos.length ? 'info' : 'sucesso', r.avisos);
             } catch (e) {
-              avisar(e instanceof ErroImportacao ? e.message : `Não deu para ler a planilha: ${e instanceof Error ? e.message : String(e)}`, 'erro');
+              avisar(e instanceof ErroImportacao ? e.message : t.barra.planilhaFalhou(e instanceof Error ? e.message : String(e)), 'erro');
             }
           }}
         />
         <button className="botao" onClick={aoDescartar} disabled={!sujo || salvando}>
-          Descartar
+          {t.barra.descartar}
         </button>
         <button className="botao botao-primario" onClick={() => void salvar()} disabled={!sujo || salvando}>
-          {salvando ? 'Salvando…' : `Salvar versão ${proximaVersao}`}
+          {salvando ? t.barra.salvando : t.barra.salvarVersao(proximaVersao)}
         </button>
       </div>
 
       <div className="grade-editor">
         <div className="coluna-principal">
           <div className="cartao secao">
-            <h2>Processo</h2>
+            <h2>{t.processo.titulo}</h2>
             <div className="linha-campos">
               <label className="campo">
-                <span>Nome</span>
+                <span>{t.processo.nome}</span>
                 <input className="entrada" value={m.processo.nome} onChange={(e) => aoMudar({ ...m, processo: { ...m.processo, nome: e.target.value } })} />
               </label>
               <label className="campo">
-                <span>Id</span>
+                <span>{t.processo.id}</span>
                 <input className="entrada mono" value={m.processo.id} onChange={(e) => aoMudar({ ...m, processo: { ...m.processo, id: e.target.value } })} />
               </label>
             </div>
@@ -224,8 +231,8 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
 
           <div className="cartao secao">
             <div className="secao-cabecalho">
-              <h2>Raias</h2>
-              <span className="suave pequeno">De cima para baixo. Raia é função, não pessoa.</span>
+              <h2>{t.raias.titulo}</h2>
+              <span className="suave pequeno">{t.raias.dica}</span>
             </div>
             <ol className="lista-raias">
               {m.raias.map((r, i) => (
@@ -233,17 +240,17 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                   <input
                     className="entrada"
                     value={r.nome}
-                    aria-label={`Nome da raia ${i + 1}`}
+                    aria-label={t.raias.nomeDaRaia(i + 1)}
                     onChange={(e) => aoMudar({ ...m, raias: m.raias.map((x, j) => (j === i ? { ...x, nome: e.target.value } : x)) })}
                   />
                   <span className="mono suave pequeno">{r.id}</span>
-                  <button className="icone" title="Subir" aria-label="Subir raia" onClick={() => aoMudar({ ...m, raias: mover(m.raias, i, i - 1) })} disabled={i === 0}>
+                  <button className="icone" title={t.raias.subir} aria-label={t.raias.subirRaia} onClick={() => aoMudar({ ...m, raias: mover(m.raias, i, i - 1) })} disabled={i === 0}>
                     ↑
                   </button>
                   <button
                     className="icone"
-                    title="Descer"
-                    aria-label="Descer raia"
+                    title={t.raias.descer}
+                    aria-label={t.raias.descerRaia}
                     onClick={() => aoMudar({ ...m, raias: mover(m.raias, i, i + 1) })}
                     disabled={i === m.raias.length - 1}
                   >
@@ -251,8 +258,8 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                   </button>
                   <button
                     className="icone icone-perigo"
-                    title={usadas.has(r.id) ? 'Tem etapas nesta raia: mude-as de raia antes' : 'Remover raia'}
-                    aria-label="Remover raia"
+                    title={usadas.has(r.id) ? t.raias.temEtapas : t.raias.removerRaia}
+                    aria-label={t.raias.removerRaia}
                     onClick={() => aoMudar({ ...m, raias: m.raias.filter((_, j) => j !== i) })}
                     disabled={usadas.has(r.id) || m.raias.length === 1}
                   >
@@ -261,30 +268,34 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                 </li>
               ))}
             </ol>
-            <button className="botao botao-fantasma" onClick={() => aoMudar({ ...m, raias: [...m.raias, { id: proximoIdRaia(m), nome: `Raia ${m.raias.length + 1}` }] })}>
-              + Raia
+            <button className="botao botao-fantasma" onClick={() => aoMudar({ ...m, raias: [...m.raias, { id: proximoIdRaia(m), nome: t.raias.nomePadrao(m.raias.length + 1) }] })}>
+              {t.raias.adicionar}
             </button>
           </div>
 
           <div className="cartao secao">
             <div className="secao-cabecalho">
-              <h2>Etapas</h2>
+              <h2>{t.etapas.titulo}</h2>
               <span className="suave pequeno">
-                Em <em>Próximos</em>, escreva as chaves de destino separadas por vírgula; numa decisão, com o rótulo: <code>E04: Sim, E10: Não</code>.
+                {t.etapas.dicaAntes}
+                <em>{t.etapas.dicaProximos}</em>
+                {t.etapas.dicaMeio}
+                <code>{t.etapas.dicaExemplo}</code>
+                {t.etapas.dicaDepois}
               </span>
             </div>
             <div className="rolagem-x">
               <table className="tabela tabela-matriz">
                 <thead>
                   <tr>
-                    <th aria-label="Detalhes" />
-                    <th>Chave</th>
-                    <th>Tipo</th>
-                    <th>Nome</th>
-                    <th>Raia</th>
-                    <th>Sistema</th>
-                    <th>Próximos</th>
-                    <th aria-label="Ações" />
+                    <th aria-label={t.etapas.colunas.detalhes} />
+                    <th>{t.etapas.colunas.chave}</th>
+                    <th>{t.etapas.colunas.tipo}</th>
+                    <th>{t.etapas.colunas.nome}</th>
+                    <th>{t.etapas.colunas.raia}</th>
+                    <th>{t.etapas.colunas.sistema}</th>
+                    <th>{t.etapas.colunas.proximos}</th>
+                    <th aria-label={t.etapas.colunas.acoes} />
                   </tr>
                 </thead>
                 <tbody>
@@ -300,7 +311,7 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                           title={probs.map((p) => p.mensagem).join('\n') || undefined}
                         >
                           <td>
-                            <button className="icone" aria-expanded={aberta} aria-label="Detalhes da etapa" onClick={() => alternar(e.chave)}>
+                            <button className="icone" aria-expanded={aberta} aria-label={t.etapas.detalhesDaEtapa} onClick={() => alternar(e.chave)}>
                               {aberta ? '▾' : '▸'}
                             </button>
                           </td>
@@ -308,12 +319,12 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                             <CampoChave valor={e.chave} aoConfirmar={(nova) => renomearChave(i, nova)} />
                           </td>
                           <td>
-                            <select className="entrada" value={e.tipo} onChange={(ev) => atualizar(i, { tipo: ev.target.value as TipoEtapa })} aria-label="Tipo">
-                              {GRUPOS_TIPO.map((g) => (
+                            <select className="entrada" value={e.tipo} onChange={(ev) => atualizar(i, { tipo: ev.target.value as TipoEtapa })} aria-label={t.etapas.colunas.tipo}>
+                              {gruposTipo(idioma).map((g) => (
                                 <optgroup key={g.grupo} label={g.grupo}>
-                                  {g.tipos.map((t) => (
-                                    <option key={t} value={t}>
-                                      {ROTULOS_TIPO[t]}
+                                  {g.tipos.map((tipo) => (
+                                    <option key={tipo} value={tipo}>
+                                      {rotulos[tipo]}
                                     </option>
                                   ))}
                                 </optgroup>
@@ -321,11 +332,11 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                             </select>
                           </td>
                           <td>
-                            <input className="entrada entrada-nome" value={e.nome} onChange={(ev) => atualizar(i, { nome: ev.target.value })} aria-label="Nome" placeholder="Verbo + objeto" />
+                            <input className="entrada entrada-nome" value={e.nome} onChange={(ev) => atualizar(i, { nome: ev.target.value })} aria-label={t.etapas.colunas.nome} placeholder={t.etapas.nomePlaceholder} />
                           </td>
                           <td>
-                            <select className="entrada" value={e.raia} onChange={(ev) => atualizar(i, { raia: ev.target.value })} aria-label="Raia">
-                              {!m.raias.some((r) => r.id === e.raia) && <option value={e.raia}>{e.raia} (não existe)</option>}
+                            <select className="entrada" value={e.raia} onChange={(ev) => atualizar(i, { raia: ev.target.value })} aria-label={t.etapas.colunas.raia}>
+                              {!m.raias.some((r) => r.id === e.raia) && <option value={e.raia}>{t.etapas.raiaInexistente(e.raia)}</option>}
                               {m.raias.map((r) => (
                                 <option key={r.id} value={r.id}>
                                   {r.nome}
@@ -334,19 +345,19 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                             </select>
                           </td>
                           <td>
-                            <input className="entrada entrada-curta" value={e.sistema ?? ''} onChange={(ev) => atualizar(i, opcional('sistema', ev.target.value))} aria-label="Sistema" />
+                            <input className="entrada entrada-curta" value={e.sistema ?? ''} onChange={(ev) => atualizar(i, opcional('sistema', ev.target.value))} aria-label={t.etapas.colunas.sistema} />
                           </td>
                           <td>
                             <CampoProximos valor={e.proximos} aoConfirmar={(proximos) => atualizar(i, { proximos })} />
                           </td>
                           <td className="acoes">
-                            <button className="icone" aria-label="Subir etapa" title="Subir" onClick={() => etapas(mover(m.etapas, i, i - 1))} disabled={i === 0}>
+                            <button className="icone" aria-label={t.etapas.subirEtapa} title={t.raias.subir} onClick={() => etapas(mover(m.etapas, i, i - 1))} disabled={i === 0}>
                               ↑
                             </button>
-                            <button className="icone" aria-label="Descer etapa" title="Descer" onClick={() => etapas(mover(m.etapas, i, i + 1))} disabled={i === m.etapas.length - 1}>
+                            <button className="icone" aria-label={t.etapas.descerEtapa} title={t.raias.descer} onClick={() => etapas(mover(m.etapas, i, i + 1))} disabled={i === m.etapas.length - 1}>
                               ↓
                             </button>
-                            <button className="icone icone-perigo" aria-label="Remover etapa" title="Remover (e as setas que chegam nela)" onClick={() => remover(i)}>
+                            <button className="icone icone-perigo" aria-label={t.etapas.removerEtapa} title={t.etapas.removerTitulo} onClick={() => remover(i)}>
                               ✕
                             </button>
                           </td>
@@ -376,16 +387,16 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
               </table>
             </div>
             <button className="botao botao-fantasma" onClick={adicionar}>
-              + Etapa
+              {t.etapas.adicionar}
             </button>
           </div>
         </div>
 
-        <aside className="cartao secao painel-portao" aria-label="Portão">
-          <h2>Portão</h2>
+        <aside className="cartao secao painel-portao" aria-label={t.portao.titulo}>
+          <h2>{t.portao.titulo}</h2>
           {formato.length > 0 && (
             <>
-              <p className="texto-erro">A matriz está fora do formato:</p>
+              <p className="texto-erro">{t.portao.foraDoFormato}</p>
               <ul className="lista-problemas">
                 {formato.map((f) => (
                   <li key={f} className="erro">
@@ -395,7 +406,7 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
               </ul>
             </>
           )}
-          {formato.length === 0 && problemas.length === 0 && <p className="texto-ok">Aprovada, sem avisos.</p>}
+          {formato.length === 0 && problemas.length === 0 && <p className="texto-ok">{t.portao.aprovada}</p>}
           {problemas.length > 0 && (
             <ul className="lista-problemas">
               {[...problemas.filter((p) => p.severidade === 'erro'), ...problemas.filter((p) => p.severidade === 'aviso')]
@@ -412,8 +423,7 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                 ))}
               {inalcancaveis.length > 0 && (
                 <li className="erro">
-                  {inalcancaveis.length === 1 ? 'Uma etapa não tem' : `${inalcancaveis.length} etapas não têm`} caminho a partir de um início
-                  (em geral, consequência de uma seta quebrada acima):{' '}
+                  {t.portao.inalcancaveis(inalcancaveis.length)}{' '}
                   {inalcancaveis.map((c, k) => (
                     <Fragment key={c}>
                       {k > 0 && ', '}
@@ -438,6 +448,7 @@ function opcional<K extends 'sistema' | 'descricao' | 'ator' | 'entrada' | 'said
 }
 
 function CampoChave({ valor, aoConfirmar }: { valor: string; aoConfirmar: (nova: string) => string | null }) {
+  const t = useTextos().matriz;
   const [texto, setTexto] = useState(valor);
   const [erro, setErro] = useState<string | null>(null);
   const [ultimo, setUltimo] = useState(valor);
@@ -454,8 +465,8 @@ function CampoChave({ valor, aoConfirmar }: { valor: string; aoConfirmar: (nova:
     <input
       className={`entrada mono entrada-chave ${erro ? 'entrada-invalida' : ''}`}
       value={texto}
-      title={erro ?? 'A chave prende as setas e as correções do desenho. Renomear atualiza as setas.'}
-      aria-label="Chave"
+      title={erro ?? t.chave.titulo}
+      aria-label={t.etapas.colunas.chave}
       onChange={(e) => setTexto(e.target.value)}
       onBlur={confirmar}
       onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
@@ -464,6 +475,7 @@ function CampoChave({ valor, aoConfirmar }: { valor: string; aoConfirmar: (nova:
 }
 
 function CampoProximos({ valor, aoConfirmar }: { valor: Saida[]; aoConfirmar: (s: Saida[]) => void }) {
+  const t = useTextos().matriz;
   const formatado = formatarProximos(valor);
   const [texto, setTexto] = useState(formatado);
   const [ultimo, setUltimo] = useState(formatado);
@@ -475,7 +487,7 @@ function CampoProximos({ valor, aoConfirmar }: { valor: Saida[]; aoConfirmar: (s
     <input
       className="entrada mono entrada-proximos"
       value={texto}
-      aria-label="Próximos"
+      aria-label={t.etapas.colunas.proximos}
       placeholder="E02"
       onChange={(e) => setTexto(e.target.value)}
       onBlur={() => aoConfirmar(lerProximos(texto))}
@@ -485,30 +497,31 @@ function CampoProximos({ valor, aoConfirmar }: { valor: Saida[]; aoConfirmar: (s
 }
 
 function Detalhes({ etapa: e, aoMudar }: { etapa: Etapa; aoMudar: (campos: Partial<Etapa>) => void }) {
+  const t = useTextos().matriz.detalhes;
   return (
     <div className="detalhes">
       <label className="campo campo-largo">
-        <span>Descrição</span>
+        <span>{t.descricao}</span>
         <textarea className="entrada" rows={2} value={e.descricao ?? ''} onChange={(ev) => aoMudar(opcional('descricao', ev.target.value))} />
       </label>
       <label className="campo">
-        <span>Ator (se diferente da raia)</span>
+        <span>{t.ator}</span>
         <input className="entrada" value={e.ator ?? ''} onChange={(ev) => aoMudar(opcional('ator', ev.target.value))} />
       </label>
       <label className="campo">
-        <span>Regra</span>
+        <span>{t.regra}</span>
         <input className="entrada" value={e.regra ?? ''} onChange={(ev) => aoMudar(opcional('regra', ev.target.value))} />
       </label>
       <label className="campo">
-        <span>Entrada</span>
+        <span>{t.entrada}</span>
         <input className="entrada" value={e.entrada ?? ''} onChange={(ev) => aoMudar(opcional('entrada', ev.target.value))} />
       </label>
       <label className="campo">
-        <span>Saída</span>
+        <span>{t.saida}</span>
         <input className="entrada" value={e.saida ?? ''} onChange={(ev) => aoMudar(opcional('saida', ev.target.value))} />
       </label>
       <label className="campo">
-        <span>Evidências</span>
+        <span>{t.evidencias}</span>
         <input
           className="entrada mono"
           placeholder="EV-001, EV-002"
@@ -521,7 +534,7 @@ function Detalhes({ etapa: e, aoMudar }: { etapa: Etapa; aoMudar: (campos: Parti
       </label>
       <label className="campo campo-check">
         <input type="checkbox" checked={e.revisarHumano ?? false} onChange={(ev) => aoMudar({ revisarHumano: ev.target.checked || undefined })} />
-        <span>Pede revisão humana</span>
+        <span>{t.revisarHumano}</span>
       </label>
     </div>
   );
@@ -542,23 +555,24 @@ function VinculoSubprocesso({
   aoLigar: (id: string) => void;
   aoCriar: () => Promise<void>;
 }) {
+  const t = useTextos().matriz.subprocesso;
   const [criando, setCriando] = useState(false);
   const ligado = etapa.subprocesso ? (filho ?? opcoes.find((o) => o.id === etapa.subprocesso) ?? null) : null;
   return (
     <div className="vinculo-subprocesso">
-      <strong className="pequeno">Mapeamento filho</strong>
+      <strong className="pequeno">{t.titulo}</strong>
       {etapa.subprocesso && ligado && (
         <span>
-          Detalhado em{' '}
+          {t.detalhadoEm}{' '}
           <a href={`#/m/${ligado.id}`} className="link-forte">
             {ligado.nome}
           </a>
-          . No desenho, duplo clique na etapa abre o filho.
+          {t.abrirNoDesenho}
         </span>
       )}
-      {etapa.subprocesso && !ligado && <span className="texto-aviso">O mapeamento ligado não existe mais.</span>}
-      <select className="entrada" value={etapa.subprocesso ?? ''} onChange={(ev) => aoLigar(ev.target.value)} aria-label="Mapeamento filho">
-        <option value="">Nenhum</option>
+      {etapa.subprocesso && !ligado && <span className="texto-aviso">{t.naoExisteMais}</span>}
+      <select className="entrada" value={etapa.subprocesso ?? ''} onChange={(ev) => aoLigar(ev.target.value)} aria-label={t.titulo}>
+        <option value="">{t.nenhum}</option>
         {opcoes.map((o) => (
           <option key={o.id} value={o.id}>
             {o.nome}
@@ -569,14 +583,14 @@ function VinculoSubprocesso({
         <button
           className="botao"
           disabled={sujo || criando}
-          title={sujo ? 'Salve a versão antes: o filho é ligado numa versão nova da matriz' : 'Cria um mapeamento em branco para detalhar esta etapa'}
+          title={sujo ? t.salveAntes : t.criaEmBranco}
           onClick={async () => {
             setCriando(true);
             await aoCriar();
             setCriando(false);
           }}
         >
-          {criando ? 'Criando…' : 'Criar mapeamento filho'}
+          {criando ? t.criando : t.criar}
         </button>
       )}
     </div>

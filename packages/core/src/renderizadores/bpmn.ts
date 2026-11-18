@@ -2,6 +2,7 @@ import { familiaDoTipo, type Etapa, type Matriz, type TipoEtapa } from '../matri
 import { calcularLayout, etapasUnicas, type Caixa } from '../layout.ts';
 import { idDaRaia } from '../ids.ts';
 import type { Correcoes } from '../correcoes.ts';
+import type { Idioma } from '../idioma.ts';
 
 const TAG: Record<TipoEtapa, string> = {
   inicio: 'startEvent',
@@ -32,15 +33,22 @@ export function escaparXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function documentacao(e: Etapa): string {
+// Rótulos da documentação de cada elemento. O importador lê os dois idiomas.
+const ROTULOS_DOC: Record<Idioma, { ator: string; sistema: string; entrada: string; saida: string; regra: string; evidencias: string }> = {
+  pt: { ator: 'Ator', sistema: 'Sistema', entrada: 'Entrada', saida: 'Saída', regra: 'Regra', evidencias: 'Evidências' },
+  en: { ator: 'Actor', sistema: 'System', entrada: 'Input', saida: 'Output', regra: 'Rule', evidencias: 'Evidence' },
+};
+
+function documentacao(e: Etapa, idioma: Idioma): string {
+  const r = ROTULOS_DOC[idioma];
   const linhas = [
     e.descricao,
-    e.ator && `Ator: ${e.ator}`,
-    e.sistema && `Sistema: ${e.sistema}`,
-    e.entrada && `Entrada: ${e.entrada}`,
-    e.saida && `Saída: ${e.saida}`,
-    e.regra && `Regra: ${e.regra}`,
-    e.evidencias?.length && `Evidências: ${e.evidencias.join(', ')}`,
+    e.ator && `${r.ator}: ${e.ator}`,
+    e.sistema && `${r.sistema}: ${e.sistema}`,
+    e.entrada && `${r.entrada}: ${e.entrada}`,
+    e.saida && `${r.saida}: ${e.saida}`,
+    e.regra && `${r.regra}: ${e.regra}`,
+    e.evidencias?.length && `${r.evidencias}: ${e.evidencias.join(', ')}`,
   ].filter(Boolean);
   return linhas.join('\n');
 }
@@ -50,6 +58,8 @@ const bounds = (c: Caixa) =>
 
 export interface OpcoesBpmn {
   correcoes?: Correcoes;
+  /** Idioma dos rótulos da documentação ("Sistema:" ou "System:"). Padrão: português. */
+  idioma?: Idioma;
 }
 
 /**
@@ -104,7 +114,7 @@ export function renderizarBpmn(m: Matriz, opcoes: OpcoesBpmn = {}): string {
 
   for (const e of etapas) {
     const tag = TAG[e.tipo];
-    const doc = documentacao(e);
+    const doc = documentacao(e, opcoes.idioma ?? 'pt');
     x.push(`    <bpmn:${tag} id="${e.chave}" name="${escaparXml(e.nome)}">`);
     if (doc) x.push(`      <bpmn:documentation>${escaparXml(doc)}</bpmn:documentation>`);
     for (const f of entradas.get(e.chave) ?? []) x.push(`      <bpmn:incoming>${f}</bpmn:incoming>`);

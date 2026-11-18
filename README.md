@@ -4,7 +4,9 @@
 documento do processo; os agentes montam a matriz; o Bora Mapear desenha em BPMN, Mermaid ou React Flow.
 Você corrige o desenho, e a correção fica guardada.
 
-> Status: **fase 4 — Postgres, exportar em SVG/PNG/PDF, matriz em CSV e subprocessos**. Próximo: interface em inglês e modo nuvem ([roadmap](docs/roadmap.md)).
+> Status: **fase 4 — Postgres, exportar em SVG/PNG/PDF, matriz em CSV, subprocessos e interface em inglês**. Próximo: modo nuvem ([roadmap](docs/roadmap.md)).
+>
+> *The interface is available in English too: pick it in the language selector at the top.*
 
 ## A ideia
 
@@ -82,6 +84,9 @@ Guarde a `BORA_SECRET`: sem ela, as chaves de API cadastradas não abrem mais.
 - **Subprocessos**: numa etapa do tipo subprocesso, "Criar mapeamento filho" abre um mapeamento novo para
   detalhá-la (ou ligue a um que já existe). No desenho, duplo clique na etapa abre o filho; no filho, uma
   faixa mostra de qual processo ele faz parte.
+- **Português ou inglês**: o seletor no topo troca a interface inteira, as mensagens do portão, os avisos, o
+  registro de correções, o exemplo e o CSV. O conteúdo da matriz é seu e não é traduzido; com a interface em
+  inglês, os agentes escrevem o que produzem em inglês.
 
 ## Agentes de IA, com a sua chave
 

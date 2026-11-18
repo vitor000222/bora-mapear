@@ -2,8 +2,66 @@
 import { BpmnModdle } from 'bpmn-moddle';
 import { lerMatriz, type Etapa, type Matriz, type Raia, type TipoEtapa } from './matriz.ts';
 import { extrairCorrecoes, lerDesenhoBpmn, type Correcoes } from './correcoes.ts';
+import type { Idioma } from './idioma.ts';
 
 export class ErroImportacao extends Error {}
+
+export interface OpcoesImportacao {
+  /** Idioma dos avisos, dos erros e dos nomes padrão ("Processo importado", "Geral"). Padrão: português. */
+  idioma?: Idioma;
+}
+
+/** Mensagens dos importadores (BPMN, Mermaid e CSV). */
+export const TEXTOS_IMPORTACAO = {
+  pt: {
+    processoImportado: 'Processo importado',
+    geral: 'Geral',
+    bpmnInvalido: (detalhe: string) => `O arquivo não é um BPMN 2.0 válido: ${detalhe}`,
+    semProcesso: 'O arquivo não tem nenhum processo com elementos.',
+    variosProcessos: (n: number) => `O arquivo tem ${n} processos (pools); só o primeiro foi importado.`,
+    subprocessoAchatado: (nome: string, n: number) => `O subprocesso "${nome}" virou uma etapa só; os ${n} elementos de dentro ficaram de fora.`,
+    semRaia: (nome: string, raia: string) => `"${nome}" não estava em raia nenhuma; foi para "${raia}".`,
+    ignorados: (n: number, tipo: string) => `${n} ${tipo} ignorado(s): a matriz não tem esse tipo de elemento.`,
+    layoutRefeito: 'O desenho foi refeito pelo layout do Bora Mapear; as posições do arquivo original não foram mantidas.',
+    formaAberta: (linha: string) => `Forma sem fechamento em: ${linha}`,
+    naoEFluxograma: 'O código não começa com "flowchart" ou "graph": só o fluxograma do Mermaid é lido.',
+    trechoNaoEntendido: (n: number, trecho: string) => `Linha ${n}: trecho não entendido "${trecho}".`,
+    setaSemDestino: (n: number) => `Linha ${n}: seta sem destino.`,
+    codigoVazio: 'O código está vazio.',
+    semNos: 'Não achei nenhum nó no código.',
+    foraDeSubgraph: (nome: string, raia: string) => `"${nome}" estava fora de qualquer subgraph e foi para a raia "${raia}", de uma etapa vizinha.`,
+    paraGeral: (raia: string) => `Nós sem subgraph e sem vizinho com raia foram para a raia "${raia}".`,
+    planilhaVazia: 'A planilha está vazia: precisa do cabeçalho e de pelo menos uma linha.',
+    faltamColunas: (colunas: string) => `Faltam colunas na planilha: ${colunas}. O cabeçalho precisa de chave, tipo, nome e raia.`,
+    tipoDesconhecido: (n: number, tipo: string) => `Linha ${n}: tipo "${tipo}" desconhecido; virou "Tarefa".`,
+    confiancaIgnorada: (n: number, valor: string) => `Linha ${n}: confiança "${valor}" ignorada (use de 0 a 1).`,
+    linha: (n: number) => `linha ${n}`,
+  },
+  en: {
+    processoImportado: 'Imported process',
+    geral: 'General',
+    bpmnInvalido: (detalhe: string) => `The file is not valid BPMN 2.0: ${detalhe}`,
+    semProcesso: 'The file has no process with elements.',
+    variosProcessos: (n: number) => `The file has ${n} processes (pools); only the first one was imported.`,
+    subprocessoAchatado: (nome: string, n: number) => `Subprocess "${nome}" became a single step; the ${n} elements inside it were left out.`,
+    semRaia: (nome: string, raia: string) => `"${nome}" was not in any lane; it went to "${raia}".`,
+    ignorados: (n: number, tipo: string) => `${n} ${tipo} ignored: the matrix has no such element type.`,
+    layoutRefeito: "The drawing was redone by Bora Mapear's layout; the original file's positions were not kept.",
+    formaAberta: (linha: string) => `Unclosed shape in: ${linha}`,
+    naoEFluxograma: 'The code does not start with "flowchart" or "graph": only Mermaid flowcharts are read.',
+    trechoNaoEntendido: (n: number, trecho: string) => `Line ${n}: could not understand "${trecho}".`,
+    setaSemDestino: (n: number) => `Line ${n}: arrow without a target.`,
+    codigoVazio: 'The code is empty.',
+    semNos: 'No nodes found in the code.',
+    foraDeSubgraph: (nome: string, raia: string) => `"${nome}" was outside any subgraph and went to lane "${raia}", from a neighboring step.`,
+    paraGeral: (raia: string) => `Nodes with no subgraph and no neighbor in a lane went to lane "${raia}".`,
+    planilhaVazia: 'The spreadsheet is empty: it needs the header and at least one row.',
+    faltamColunas: (colunas: string) => `Missing columns: ${colunas}. The header needs key, type, name and lane.`,
+    tipoDesconhecido: (n: number, tipo: string) => `Row ${n}: unknown type "${tipo}"; it became "Task".`,
+    confiancaIgnorada: (n: number, valor: string) => `Row ${n}: confidence "${valor}" ignored (use 0 to 1).`,
+    linha: (n: number) => `row ${n}`,
+  },
+} satisfies Record<Idioma, unknown>;
 
 export interface ResultadoImportacao {
   matriz: Matriz;
@@ -82,19 +140,36 @@ export function paraId(texto: string, prefixo: string): string {
 
 const CHAVE_VALIDA = /^[A-Za-z][A-Za-z0-9_-]*$/;
 
-/** Desfaz a documentação que o renderizador escreve: "Sistema: X", "Regra: Y", "Evidências: EV-001". */
+/**
+ * Desfaz a documentação que o renderizador escreve, em português ou em inglês:
+ * "Sistema: X" / "System: X", "Regra: Y" / "Rule: Y", "Evidências: EV-001" / "Evidence: EV-001".
+ */
 function lerDocumentacao(texto: string): Partial<Etapa> {
   const campos: Partial<Etapa> = {};
   const resto: string[] = [];
-  const mapa: Record<string, 'ator' | 'sistema' | 'entrada' | 'saida' | 'regra'> = { Ator: 'ator', Sistema: 'sistema', Entrada: 'entrada', Saída: 'saida', Regra: 'regra' };
+  const mapa: Record<string, 'ator' | 'sistema' | 'entrada' | 'saida' | 'regra' | 'evidencias'> = {
+    Ator: 'ator',
+    Sistema: 'sistema',
+    Entrada: 'entrada',
+    Saída: 'saida',
+    Regra: 'regra',
+    Evidências: 'evidencias',
+    Actor: 'ator',
+    System: 'sistema',
+    Input: 'entrada',
+    Output: 'saida',
+    Rule: 'regra',
+    Evidence: 'evidencias',
+  };
   for (const linha of texto.split('\n')) {
-    const m = /^(Ator|Sistema|Entrada|Saída|Regra|Evidências):\s*(.+)$/.exec(linha.trim());
-    if (!m) {
+    const m = /^([^:]{3,12}):\s*(.+)$/.exec(linha.trim());
+    const campo = m ? mapa[m[1]!] : undefined;
+    if (!m || !campo) {
       if (linha.trim()) resto.push(linha.trim());
       continue;
     }
-    if (m[1] === 'Evidências') campos.evidencias = m[2]!.split(',').map((s) => s.trim()).filter(Boolean);
-    else campos[mapa[m[1]!]!] = m[2]!.trim();
+    if (campo === 'evidencias') campos.evidencias = m[2]!.split(',').map((s) => s.trim()).filter(Boolean);
+    else campos[campo] = m[2]!.trim();
   }
   if (resto.length) campos.descricao = resto.join(' ');
   return campos;
@@ -104,25 +179,26 @@ function lerDocumentacao(texto: string): Partial<Etapa> {
  * BPMN 2.0 (de qualquer ferramenta: Camunda, bpmn.io, Bizagi, o próprio Bora Mapear) → matriz.
  * Determinístico. O id de cada elemento vira a chave da linha, quando é uma chave válida.
  */
-export async function importarBpmn(xml: string): Promise<ResultadoImportacao> {
+export async function importarBpmn(xml: string, opcoes: OpcoesImportacao = {}): Promise<ResultadoImportacao> {
+  const t = TEXTOS_IMPORTACAO[opcoes.idioma ?? 'pt'];
   let definicoes: ElementoBpmn;
   try {
     const r = await new BpmnModdle().fromXML(xml);
     definicoes = r.rootElement as ElementoBpmn;
   } catch (erro) {
-    throw new ErroImportacao(`O arquivo não é um BPMN 2.0 válido: ${erro instanceof Error ? erro.message : String(erro)}`);
+    throw new ErroImportacao(t.bpmnInvalido(erro instanceof Error ? erro.message : String(erro)));
   }
   const avisos: string[] = [];
   const raizes = definicoes.rootElements ?? [];
   const processos = raizes.filter((e) => e.$type === 'bpmn:Process' && (e.flowElements?.length ?? 0) > 0);
-  if (!processos.length) throw new ErroImportacao('O arquivo não tem nenhum processo com elementos.');
+  if (!processos.length) throw new ErroImportacao(t.semProcesso);
   const processo = processos[0]!;
-  if (processos.length > 1) avisos.push(`O arquivo tem ${processos.length} processos (pools); só o primeiro foi importado.`);
+  if (processos.length > 1) avisos.push(t.variosProcessos(processos.length));
   const participante = raizes
     .filter((e) => e.$type === 'bpmn:Collaboration')
     .flatMap((c) => c.participants ?? [])
     .find((p) => p.processRef?.id === processo.id);
-  const nomeProcesso = participante?.name || processo.name || 'Processo importado';
+  const nomeProcesso = participante?.name || processo.name || t.processoImportado;
 
   // Chaves: o id do elemento, ou um id válido derivado dele.
   const chaves = new Map<string, string>();
@@ -170,7 +246,7 @@ export async function importarBpmn(xml: string): Promise<ResultadoImportacao> {
       continue;
     }
     if (tipo === 'subprocesso' && (el.flowElements?.length ?? 0) > 0) {
-      avisos.push(`O subprocesso "${el.name ?? el.id}" virou uma etapa só; os ${el.flowElements!.length} elementos de dentro ficaram de fora.`);
+      avisos.push(t.subprocessoAchatado(el.name ?? el.id, el.flowElements!.length));
     }
     const etapa: Etapa = {
       chave: chaveDe(el.id),
@@ -182,12 +258,12 @@ export async function importarBpmn(xml: string): Promise<ResultadoImportacao> {
     };
     if (!etapa.raia) {
       etapa.raia = raias[0]!.id;
-      avisos.push(`"${etapa.nome || el.id}" não estava em raia nenhuma; foi para "${raias[0]!.nome}".`);
+      avisos.push(t.semRaia(etapa.nome || el.id, raias[0]!.nome));
     }
     etapas.push(etapa);
   }
   if (!raias.length) raias.push(raiaPadrao);
-  for (const [tipo, n] of ignorados) avisos.push(`${n} ${tipo.replace('bpmn:', '')} ignorado(s): a matriz não tem esse tipo de elemento.`);
+  for (const [tipo, n] of ignorados) avisos.push(t.ignorados(n, tipo.replace('bpmn:', '')));
 
   const porChave = new Map(etapas.map((e) => [e.chave, e]));
   for (const f of fluxos) {
@@ -225,7 +301,7 @@ export async function importarBpmn(xml: string): Promise<ResultadoImportacao> {
   if (definicoes.exporter === 'Bora Mapear') {
     resultado.correcoes = extrairCorrecoes(matriz, lerDesenhoBpmn(xml, matriz)).correcoes;
   } else {
-    avisos.push('O desenho foi refeito pelo layout do Bora Mapear; as posições do arquivo original não foram mantidas.');
+    avisos.push(t.layoutRefeito);
   }
   return resultado;
 }

@@ -5,7 +5,7 @@ import {
   aprenderEstilo,
   converter,
   criarCliente,
-  DESCRICOES_AGENTE,
+  descricoesAgente,
   editar,
   ErroAgente,
   ErroProvedor,
@@ -21,6 +21,7 @@ import {
 } from '@bora-mapear/agentes';
 import {
   csvParaMatriz,
+  type Idioma,
   detectarFormato,
   ErroImportacao,
   EstiloVisualSchema,
@@ -35,11 +36,11 @@ import {
   type ResultadoImportacao,
 } from '@bora-mapear/core';
 import { matrizInicial } from './modelos.ts';
-import { corpo, ErroHttp } from './http.ts';
+import { corpo, ErroHttp, idiomaDe } from './http.ts';
 import type { AgenteConfiguravel, Repositorio } from './repositorio.ts';
 import { Cofre, finalDaChave } from './segredo.ts';
 import type { ContextoExecucao, Executor } from './execucoes.ts';
-import { ErroFonte, extrairTexto, TAMANHO_MAXIMO } from './fontes.ts';
+import { ErroFonte, extrairTexto, TAMANHO_MAXIMO, textosFonte } from './fontes.ts';
 
 export interface DependenciasIa {
   repo: Repositorio;
@@ -77,19 +78,55 @@ const ConfigAgenteEntrada = z.object({
 
 const AGENTES_CONFIGURAVEIS: AgenteConfiguravel[] = ['padrao', ...AGENTES];
 
+const MSG = {
+  mapeamento: { pt: 'Mapeamento não encontrado.', en: 'Process map not found.' },
+  provedor: { pt: 'Provedor não encontrado.', en: 'Provider not found.' },
+  semModelo: {
+    pt: 'Nenhum modelo configurado. Em Configurações, cadastre um provedor e escolha o modelo padrão.',
+    en: 'No model configured. In Settings, add a provider and choose the default model.',
+  },
+  padrao: { pt: 'Vale para todo agente sem configuração própria.', en: 'Applies to every agent without its own settings.' },
+  fonte: { pt: 'Fonte não encontrada.', en: 'Source not found.' },
+  semArquivo: { pt: 'Nenhum arquivo enviado (campo "arquivos").', en: 'No file sent (field "arquivos").' },
+  nenhumAceito: { pt: 'Nenhum arquivo foi aceito.', en: 'No file was accepted.' },
+  tudoLido: {
+    pt: 'Todas as fontes já foram lidas. Escolha qual ler de novo, ou envie fontes novas.',
+    en: 'All sources have been read. Choose one to read again, or add new sources.',
+  },
+  semEvidencias: {
+    pt: 'Não há evidências para mapear. Envie documentos, POPs ou transcrições na seção Fontes.',
+    en: 'There is no evidence to map. Add documents, SOPs or transcripts in the Sources section.',
+  },
+  execucao: { pt: 'Execução não encontrada.', en: 'Run not found.' },
+  formatoDesconhecido: {
+    pt: 'Não reconheci o formato: o importador lê BPMN 2.0 (XML), fluxograma Mermaid e a matriz em CSV. Para outro formato, use a conversão com IA.',
+    en: 'Unknown format: the importer reads BPMN 2.0 (XML), Mermaid flowcharts and the matrix as CSV. For anything else, use AI conversion.',
+  },
+  soPropostas: {
+    pt: 'Só as propostas do Mapeador, do Editor e do Conversor viram versão.',
+    en: 'Only proposals from the Mapper, the Editor and the Converter become versions.',
+  },
+  naoTerminou: { pt: 'A execução ainda não terminou, ou falhou.', en: 'The run has not finished yet, or it failed.' },
+} satisfies Record<string, Record<Idioma, string>>;
+
+const IMPORTADO_DE = {
+  pt: { bpmn: 'Importado de BPMN.', mermaid: 'Importado de Mermaid.', csv: 'Importado de planilha (CSV).' },
+  en: { bpmn: 'Imported from BPMN.', mermaid: 'Imported from Mermaid.', csv: 'Imported from a spreadsheet (CSV).' },
+} satisfies Record<Idioma, Record<'bpmn' | 'mermaid' | 'csv', string>>;
+
 export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
   const { repo, cofre, executor } = deps;
   const opcoesCliente = deps.fetch ? { fetch: deps.fetch } : {};
 
   const exigirMapeamento = async (id: string) => {
     const m = await repo.obterMapeamento(id);
-    if (!m) throw new ErroHttp(404, 'Mapeamento não encontrado.');
+    if (!m) throw new ErroHttp(404, MSG.mapeamento);
     return m;
   };
 
   const configDoProvedor = async (id: string): Promise<ConfigProvedor> => {
     const p = await repo.obterProvedorComChave(id);
-    if (!p) throw new ErroHttp(404, 'Provedor não encontrado.');
+    if (!p) throw new ErroHttp(404, MSG.provedor);
     let chave: string | undefined;
     try {
       chave = p.chaveCifrada ? cofre.decifrar(p.chaveCifrada) : undefined;
@@ -100,16 +137,16 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
   };
 
   /** O cliente do agente: a configuração própria dele ou a padrão. Sem nenhuma, 409 com o caminho para resolver. */
-  const clienteDoAgente = async (agente: NomeAgente): Promise<ClienteModelo> => {
+  const clienteDoAgente = async (agente: NomeAgente, idioma: Idioma): Promise<ClienteModelo> => {
     const configs = await repo.listarConfigAgentes();
     const completa = (a: AgenteConfiguravel) => configs.find((c) => c.agente === a && c.provedorId && c.modelo.trim());
     const cfg = completa(agente) ?? completa('padrao');
-    if (!cfg) throw new ErroHttp(409, 'Nenhum modelo configurado. Em Configurações, cadastre um provedor e escolha o modelo padrão.');
+    if (!cfg) throw new ErroHttp(409, MSG.semModelo);
     const provedor = await configDoProvedor(cfg.provedorId!);
     return criarCliente(
       provedor,
       { modelo: cfg.modelo, ...(cfg.maxTokens ? { maxTokens: cfg.maxTokens } : {}), ...(cfg.esforco ? { esforco: cfg.esforco } : {}) },
-      opcoesCliente,
+      { ...opcoesCliente, idioma },
     );
   };
 
@@ -144,19 +181,19 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
     if (d.chave === null || d.chave === '') Object.assign(campos, { chaveCifrada: null, finalChave: null });
     else if (d.chave !== undefined) Object.assign(campos, { chaveCifrada: cofre.cifrar(d.chave), finalChave: finalDaChave(d.chave) });
     const p = await repo.atualizarProvedor(c.req.param('id'), campos);
-    if (!p) throw new ErroHttp(404, 'Provedor não encontrado.');
+    if (!p) throw new ErroHttp(404, MSG.provedor);
     return c.json(p);
   });
 
   app.delete('/api/provedores/:id', async (c) => {
-    if (!(await repo.apagarProvedor(c.req.param('id')))) throw new ErroHttp(404, 'Provedor não encontrado.');
+    if (!(await repo.apagarProvedor(c.req.param('id')))) throw new ErroHttp(404, MSG.provedor);
     return c.body(null, 204);
   });
 
   app.get('/api/provedores/:id/modelos', async (c) => {
     const provedor = await configDoProvedor(c.req.param('id'));
     try {
-      return c.json(await listarModelos(provedor, opcoesCliente));
+      return c.json(await listarModelos(provedor, { ...opcoesCliente, idioma: idiomaDe(c) }));
     } catch (erro) {
       return traduzirErro(erro);
     }
@@ -165,7 +202,7 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
   /** Uma chamada mínima, para saber se a chave e o modelo funcionam antes de gastar com um mapeamento. */
   app.post('/api/provedores/:id/testar', async (c) => {
     const { modelo } = await corpo(c, z.object({ modelo: z.string().trim().min(1, 'Informe o modelo a testar.') }));
-    const cliente = criarCliente(await configDoProvedor(c.req.param('id')), { modelo, maxTokens: 512 }, opcoesCliente);
+    const cliente = criarCliente(await configDoProvedor(c.req.param('id')), { modelo, maxTokens: 512 }, { ...opcoesCliente, idioma: idiomaDe(c) });
     const inicio = Date.now();
     try {
       const r = await gerarJson(cliente, {
@@ -189,14 +226,15 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
     const agentes = AGENTES_CONFIGURAVEIS.map(
       (a) => salvas.find((s) => s.agente === a) ?? { agente: a, provedorId: null, modelo: '', maxTokens: null, esforco: null },
     );
-    return c.json({ agentes, descricoes: { padrao: 'Vale para todo agente sem configuração própria.', ...DESCRICOES_AGENTE } });
+    const idioma = idiomaDe(c);
+    return c.json({ agentes, descricoes: { padrao: MSG.padrao[idioma], ...descricoesAgente(idioma) } });
   });
 
   app.put('/api/agentes/:agente', async (c) => {
     const agente = c.req.param('agente') as AgenteConfiguravel;
-    if (!AGENTES_CONFIGURAVEIS.includes(agente)) throw new ErroHttp(404, `Agente desconhecido: ${agente}.`);
+    if (!AGENTES_CONFIGURAVEIS.includes(agente)) throw new ErroHttp(404, { pt: `Agente desconhecido: ${agente}.`, en: `Unknown agent: ${agente}.` });
     const d = await corpo(c, ConfigAgenteEntrada);
-    if (d.provedorId && !(await repo.obterProvedorComChave(d.provedorId))) throw new ErroHttp(422, 'Provedor não encontrado.');
+    if (d.provedorId && !(await repo.obterProvedorComChave(d.provedorId))) throw new ErroHttp(422, MSG.provedor);
     return c.json(await repo.salvarConfigAgente({ agente, provedorId: d.provedorId, modelo: d.modelo, maxTokens: d.maxTokens ?? null, esforco: d.esforco ?? null }));
   });
 
@@ -211,6 +249,8 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
   app.post('/api/mapeamentos/:id/fontes', async (c) => {
     const id = c.req.param('id');
     await exigirMapeamento(id);
+    const idioma = idiomaDe(c);
+    const tf = textosFonte(idioma);
     const criadas = [];
     if ((c.req.header('content-type') ?? '').includes('application/json')) {
       const d = await corpo(c, z.object({ nome: z.string().trim().min(1).max(200), texto: z.string().trim().min(1, 'O texto está vazio.').max(2_000_000) }));
@@ -220,33 +260,33 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
     const corpoForm = await c.req.parseBody({ all: true });
     const campo = corpoForm['arquivos'];
     const arquivos = (Array.isArray(campo) ? campo : campo ? [campo] : []).filter((a): a is File => typeof a !== 'string');
-    if (!arquivos.length) throw new ErroHttp(400, 'Nenhum arquivo enviado (campo "arquivos").');
+    if (!arquivos.length) throw new ErroHttp(400, MSG.semArquivo);
     const erros: string[] = [];
     for (const arquivo of arquivos) {
       if (arquivo.size > TAMANHO_MAXIMO) {
-        erros.push(`"${arquivo.name}" passa de 20 MB.`);
+        erros.push(tf.grande(arquivo.name));
         continue;
       }
       try {
-        const { tipo, texto } = await extrairTexto(arquivo.name, new Uint8Array(await arquivo.arrayBuffer()));
+        const { tipo, texto } = await extrairTexto(arquivo.name, new Uint8Array(await arquivo.arrayBuffer()), idioma);
         criadas.push(await repo.criarFonte(id, { nome: arquivo.name, tipo, tamanho: arquivo.size, texto }));
       } catch (erro) {
         if (erro instanceof ErroFonte) erros.push(erro.message);
-        else erros.push(`"${arquivo.name}": não deu para ler (${erro instanceof Error ? erro.message : String(erro)}).`);
+        else erros.push(tf.ilegivel(arquivo.name, erro instanceof Error ? erro.message : String(erro)));
       }
     }
-    if (!criadas.length) throw new ErroHttp(415, 'Nenhum arquivo foi aceito.', erros);
+    if (!criadas.length) throw new ErroHttp(415, MSG.nenhumAceito, erros);
     return c.json(criadas, 201, erros.length ? { 'X-Bora-Avisos': encodeURIComponent(erros.join(' | ')) } : {});
   });
 
   app.get('/api/mapeamentos/:id/fontes/:fonteId', async (c) => {
     const f = await repo.obterFonte(c.req.param('id'), c.req.param('fonteId'));
-    if (!f) throw new ErroHttp(404, 'Fonte não encontrada.');
+    if (!f) throw new ErroHttp(404, MSG.fonte);
     return c.json(f);
   });
 
   app.delete('/api/mapeamentos/:id/fontes/:fonteId', async (c) => {
-    if (!(await repo.apagarFonte(c.req.param('id'), c.req.param('fonteId')))) throw new ErroHttp(404, 'Fonte não encontrada.');
+    if (!(await repo.apagarFonte(c.req.param('id'), c.req.param('fonteId')))) throw new ErroHttp(404, MSG.fonte);
     return c.body(null, 204);
   });
 
@@ -278,9 +318,10 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
     await exigirMapeamento(id);
     const { fonteIds } = await corpo(c, z.object({ fonteIds: z.array(z.string()).optional() }));
     const alvo = fonteIds?.length ? fonteIds : await pendentes(id);
-    if (!alvo.length) throw new ErroHttp(400, 'Todas as fontes já foram lidas. Escolha qual ler de novo, ou envie fontes novas.');
-    const cliente = await clienteDoAgente('leitor');
-    const exec = await executor.iniciar(id, 'ler', { fonteIds: alvo }, async (ctx) => ({ fontes: await lerFontes(id, alvo, cliente, ctx) }));
+    if (!alvo.length) throw new ErroHttp(400, MSG.tudoLido);
+    const idioma = idiomaDe(c);
+    const cliente = await clienteDoAgente('leitor', idioma);
+    const exec = await executor.iniciar(id, 'ler', { fonteIds: alvo }, async (ctx) => ({ fontes: await lerFontes(id, alvo, cliente, ctx) }), idioma);
     return c.json(exec, 202);
   });
 
@@ -290,10 +331,11 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
     const { instrucoes, lerPendentes } = await corpo(c, z.object({ instrucoes: z.string().max(4000).optional(), lerPendentes: z.boolean().default(true) }));
     const aLer = lerPendentes ? await pendentes(id) : [];
     if (!aLer.length && !(await repo.listarEvidencias(id)).length) {
-      throw new ErroHttp(400, 'Não há evidências para mapear. Envie documentos, POPs ou transcrições na seção Fontes.');
+      throw new ErroHttp(400, MSG.semEvidencias);
     }
-    const leitor = aLer.length ? await clienteDoAgente('leitor') : null;
-    const mapeador = await clienteDoAgente('mapeador');
+    const idioma = idiomaDe(c);
+    const leitor = aLer.length ? await clienteDoAgente('leitor', idioma) : null;
+    const mapeador = await clienteDoAgente('mapeador', idioma);
     const versaoBase = (await repo.versaoAtual(id))!;
     const exec = await executor.iniciar(id, 'mapear', { instrucoes: instrucoes ?? null }, async (ctx) => {
       if (leitor) await lerFontes(id, aLer, leitor, ctx);
@@ -305,34 +347,36 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
       );
       ctx.uso(r.uso);
       return { matriz: r.matriz, validacao: r.validacao, rodadas: r.rodadas, avisos: r.avisos, versaoBase: versaoBase.numero, evidencias: evidencias.length };
-    });
+    }, idioma);
     return c.json(exec, 202);
   });
 
   app.post('/api/mapeamentos/:id/ia/revisar', async (c) => {
     const id = c.req.param('id');
     await exigirMapeamento(id);
-    const cliente = await clienteDoAgente('revisor');
+    const idioma = idiomaDe(c);
+    const cliente = await clienteDoAgente('revisor', idioma);
     const versao = (await repo.versaoAtual(id))!;
     const exec = await executor.iniciar(id, 'revisar', { versao: versao.numero }, async (ctx) => {
       const r = await revisar(cliente, { matriz: versao.matriz, evidencias: await repo.listarEvidencias(id) }, ctx.progresso);
       ctx.uso(r.uso);
       return { relatorio: r.relatorio, automaticos: r.automaticos, versao: versao.numero };
-    });
+    }, idioma);
     return c.json(exec, 202);
   });
 
   app.post('/api/mapeamentos/:id/ia/editar', async (c) => {
     const id = c.req.param('id');
     await exigirMapeamento(id);
-    const { pedido } = await corpo(c, z.object({ pedido: z.string().trim().min(3, 'Escreva o que mudar.').max(4000) }));
-    const cliente = await clienteDoAgente('editor');
+    const { pedido } = await corpo(c, z.object({ pedido: z.string().trim().min(3, idiomaDe(c) === 'en' ? 'Write what to change.' : 'Escreva o que mudar.').max(4000) }));
+    const idioma = idiomaDe(c);
+    const cliente = await clienteDoAgente('editor', idioma);
     const versao = (await repo.versaoAtual(id))!;
     const exec = await executor.iniciar(id, 'editar', { pedido }, async (ctx) => {
       const r = await editar(cliente, { matriz: versao.matriz, pedido }, ctx.progresso);
       ctx.uso(r.uso);
       return { matriz: r.matriz, operacoes: r.operacoes, resumo: r.resumo, frases: r.frases, validacao: r.validacao, rodadas: r.rodadas, versaoBase: versao.numero };
-    });
+    }, idioma);
     return c.json(exec, 202);
   });
 
@@ -343,7 +387,7 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
 
   app.get('/api/execucoes/:id', async (c) => {
     const e = await repo.obterExecucao(c.req.param('id'));
-    if (!e) throw new ErroHttp(404, 'Execução não encontrada.');
+    if (!e) throw new ErroHttp(404, MSG.execucao);
     return c.json(e);
   });
 
@@ -353,23 +397,28 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
 
   /** BPMN ou Mermaid de outra ferramenta vira um mapeamento novo, sem IA. */
   app.post('/api/mapeamentos/importar', async (c) => {
+    const idioma = idiomaDe(c);
+    const en = idioma === 'en';
     const d = await corpo(
       c,
       z.object({
-        nome: z.string().trim().min(1, 'Dê um nome ao mapeamento.').max(200),
-        conteudo: z.string().min(1, 'O conteúdo está vazio.').max(LIMITE_CONTEUDO),
+        nome: z.string().trim().min(1, en ? 'Give the map a name.' : 'Dê um nome ao mapeamento.').max(200),
+        conteudo: z.string().min(1, en ? 'The content is empty.' : 'O conteúdo está vazio.').max(LIMITE_CONTEUDO),
         formato: z.enum(['bpmn', 'mermaid', 'csv', 'auto']).default('auto'),
       }),
     );
     const formato = d.formato === 'auto' ? detectarFormato(d.conteudo) : d.formato;
     if (!formato) {
-      throw new ErroHttp(422, 'Não reconheci o formato: o importador lê BPMN 2.0 (XML), fluxograma Mermaid e a matriz em CSV. Para outro formato, use a conversão com IA.', {
-        podeUsarIa: true,
-      });
+      throw new ErroHttp(422, MSG.formatoDesconhecido, { podeUsarIa: true });
     }
     let r: ResultadoImportacao;
     try {
-      r = formato === 'bpmn' ? await importarBpmn(d.conteudo) : formato === 'csv' ? csvParaMatriz(d.conteudo, d.nome) : importarMermaid(d.conteudo, d.nome);
+      r =
+        formato === 'bpmn'
+          ? await importarBpmn(d.conteudo, { idioma })
+          : formato === 'csv'
+            ? csvParaMatriz(d.conteudo, d.nome, { idioma })
+            : importarMermaid(d.conteudo, d.nome, { idioma });
     } catch (erro) {
       if (erro instanceof ErroImportacao) throw new ErroHttp(422, erro.message, { podeUsarIa: formato !== 'csv' });
       throw erro;
@@ -379,28 +428,30 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
       { nome: d.nome, descricao: '', linguagem: formato === 'mermaid' ? 'mermaid' : 'bpmn' },
       matriz,
       'pessoa',
-      `Importado de ${{ bpmn: 'BPMN', mermaid: 'Mermaid', csv: 'planilha (CSV)' }[formato]}.`,
+      IMPORTADO_DE[idioma][formato],
     );
     if (r.correcoes) await repo.salvarCorrecoes(mapeamento.id, 'bpmn', r.correcoes);
-    return c.json({ mapeamento, avisos: r.avisos, validacao: validarMatriz(matriz) }, 201);
+    return c.json({ mapeamento, avisos: r.avisos, validacao: validarMatriz(matriz, { idioma }) }, 201);
   });
 
-  const iniciarConversao = async (mapeamentoId: string, conteudo: string, cliente: ClienteModelo) => {
+  const iniciarConversao = async (mapeamentoId: string, conteudo: string, cliente: ClienteModelo, idioma: Idioma) => {
     const m = (await repo.obterMapeamento(mapeamentoId))!;
     const versao = (await repo.versaoAtual(mapeamentoId))!;
     return executor.iniciar(mapeamentoId, 'converter', { caracteres: conteudo.length }, async (ctx) => {
       const r = await converter(cliente, { conteudo, nomeProcesso: m.nome, idProcesso: versao.matriz.processo.id }, ctx.progresso);
       ctx.uso(r.uso);
       return { matriz: r.matriz, validacao: r.validacao, rodadas: r.rodadas, avisos: r.avisos, versaoBase: versao.numero };
-    });
+    }, idioma);
   };
 
   /** Qualquer outro formato (PlantUML, lista de passos, tabela): o Conversor escreve a matriz num mapeamento novo. */
   app.post('/api/mapeamentos/importar-com-ia', async (c) => {
     const d = await corpo(c, z.object({ nome: z.string().trim().min(1).max(200), conteudo: z.string().min(1).max(LIMITE_CONTEUDO) }));
-    const cliente = await clienteDoAgente('conversor');
-    const mapeamento = await repo.criarMapeamento({ nome: d.nome, descricao: '', linguagem: 'bpmn' }, matrizInicial('em-branco', d.nome), 'pessoa', 'Criado para a conversão com IA.');
-    const execucao = await iniciarConversao(mapeamento.id, d.conteudo, cliente);
+    const idioma = idiomaDe(c);
+    const cliente = await clienteDoAgente('conversor', idioma);
+    const criado = idioma === 'en' ? 'Created for AI conversion.' : 'Criado para a conversão com IA.';
+    const mapeamento = await repo.criarMapeamento({ nome: d.nome, descricao: '', linguagem: 'bpmn' }, matrizInicial('em-branco', d.nome, idioma), 'pessoa', criado);
+    const execucao = await iniciarConversao(mapeamento.id, d.conteudo, cliente, idioma);
     return c.json({ mapeamento, execucao }, 202);
   });
 
@@ -408,7 +459,8 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
     const id = c.req.param('id');
     await exigirMapeamento(id);
     const { conteudo } = await corpo(c, z.object({ conteudo: z.string().min(1).max(LIMITE_CONTEUDO) }));
-    return c.json(await iniciarConversao(id, conteudo, await clienteDoAgente('conversor')), 202);
+    const idioma = idiomaDe(c);
+    return c.json(await iniciarConversao(id, conteudo, await clienteDoAgente('conversor', idioma), idioma), 202);
   });
 
   // ---------------------------------------------------------------- estilo visual
@@ -453,7 +505,7 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
 
   /** O agente Visual propõe um estilo; nada é salvo até a pessoa aceitar (PUT /api/estilo). */
   app.post('/api/estilo/aprender', async (c) => {
-    const cliente = await clienteDoAgente('visual');
+    const cliente = await clienteDoAgente('visual', idiomaDe(c));
     const exemplos = await exemplosDeCor();
     const frases = (await repo.listarRegistroGeral(40)).flatMap((r) => r.frases).slice(0, 100);
     try {
@@ -467,19 +519,25 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
   /** Grava a proposta do Mapeador, do Editor ou do Conversor como versão nova da matriz, com o agente como autor. */
   app.post('/api/execucoes/:id/aplicar', async (c) => {
     const exec = await repo.obterExecucao(c.req.param('id'));
-    if (!exec) throw new ErroHttp(404, 'Execução não encontrada.');
+    if (!exec) throw new ErroHttp(404, MSG.execucao);
     if (exec.tipo !== 'mapear' && exec.tipo !== 'editar' && exec.tipo !== 'converter') {
-      throw new ErroHttp(400, 'Só as propostas do Mapeador, do Editor e do Conversor viram versão.');
+      throw new ErroHttp(400, MSG.soPropostas);
     }
-    if (exec.status !== 'concluida') throw new ErroHttp(409, 'A execução ainda não terminou, ou falhou.');
-    if (exec.aplicadaNaVersao !== null) throw new ErroHttp(409, `Esta proposta já virou a versão ${exec.aplicadaNaVersao}.`);
+    if (exec.status !== 'concluida') throw new ErroHttp(409, MSG.naoTerminou);
+    if (exec.aplicadaNaVersao !== null)
+      throw new ErroHttp(409, { pt: `Esta proposta já virou a versão ${exec.aplicadaNaVersao}.`, en: `This proposal already became version ${exec.aplicadaNaVersao}.` });
+    const idioma = idiomaDe(c);
+    const en = idioma === 'en';
     const { forcar, mensagem } = await corpo(c, z.object({ forcar: z.boolean().default(false), mensagem: z.string().max(500).optional() }));
     const saida = exec.saida as { matriz: unknown; versaoBase: number; resumo?: string; evidencias?: number };
     const atual = (await repo.versaoAtual(exec.mapeamentoId))!;
     if (atual.numero !== saida.versaoBase && !forcar) {
       throw new ErroHttp(
         409,
-        `A matriz mudou desde que o agente trabalhou (v${saida.versaoBase} → v${atual.numero}). Aplicar substitui essas mudanças pela proposta.`,
+        {
+          pt: `A matriz mudou desde que o agente trabalhou (v${saida.versaoBase} → v${atual.numero}). Aplicar substitui essas mudanças pela proposta.`,
+          en: `The matrix changed since the agent worked on it (v${saida.versaoBase} → v${atual.numero}). Applying replaces those changes with the proposal.`,
+        },
         { versaoBase: saida.versaoBase, versaoAtual: atual.numero },
       );
     }
@@ -492,14 +550,20 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
     const texto =
       mensagem?.trim() ||
       (exec.tipo === 'mapear'
-        ? `Mapeada pelo agente a partir de ${saida.evidencias ?? 0} evidências.`
+        ? en
+          ? `Mapped by the agent from ${saida.evidencias ?? 0} pieces of evidence.`
+          : `Mapeada pelo agente a partir de ${saida.evidencias ?? 0} evidências.`
         : exec.tipo === 'converter'
-          ? 'Convertida pelo agente a partir de código ou texto.'
-          : `${saida.resumo ?? 'Edição do agente.'} (pedido: "${(exec.entrada as { pedido: string }).pedido}")`);
+          ? en
+            ? 'Converted by the agent from code or text.'
+            : 'Convertida pelo agente a partir de código ou texto.'
+          : en
+            ? `${saida.resumo ?? 'Agent edit.'} (request: "${(exec.entrada as { pedido: string }).pedido}")`
+            : `${saida.resumo ?? 'Edição do agente.'} (pedido: "${(exec.entrada as { pedido: string }).pedido}")`);
     const autor = exec.tipo === 'mapear' ? 'agente:mapeador' : exec.tipo === 'converter' ? 'agente:conversor' : 'agente:editor';
     const versao = await repo.salvarVersao(exec.mapeamentoId, matriz, autor, texto);
     await repo.atualizarExecucao(exec.id, { aplicadaNaVersao: versao.numero });
     const { matriz: _m, ...cabecalho } = versao;
-    return c.json({ versao: cabecalho, validacao: validarMatriz(matriz) }, 201);
+    return c.json({ versao: cabecalho, validacao: validarMatriz(matriz, { idioma }) }, 201);
   });
 }

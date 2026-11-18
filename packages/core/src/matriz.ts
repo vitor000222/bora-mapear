@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Idioma } from './idioma.ts';
 
 /** Os tipos de elemento que uma linha da matriz pode ter. Ver docs/matriz.md. */
 export const TIPOS_ETAPA = [
@@ -44,14 +45,48 @@ export const ROTULOS_TIPO: Record<TipoEtapa, string> = {
   gateway_evento: 'Decisão por evento',
 };
 
-export const GRUPOS_TIPO: Array<{ grupo: string; tipos: TipoEtapa[] }> = [
-  { grupo: 'Eventos', tipos: ['inicio', 'fim', 'evento_intermediario', 'evento_timer', 'evento_mensagem'] },
-  {
-    grupo: 'Tarefas',
-    tipos: ['tarefa_usuario', 'tarefa_manual', 'tarefa_servico', 'tarefa_envio', 'tarefa_recebimento', 'tarefa_regra', 'tarefa', 'subprocesso'],
-  },
-  { grupo: 'Gateways', tipos: ['gateway_exclusivo', 'gateway_paralelo', 'gateway_inclusivo', 'gateway_evento'] },
+export const ROTULOS_TIPO_EN: Record<TipoEtapa, string> = {
+  inicio: 'Start',
+  fim: 'End',
+  evento_intermediario: 'Intermediate milestone',
+  evento_timer: 'Timer wait',
+  evento_mensagem: 'Message wait',
+  tarefa: 'Task',
+  tarefa_usuario: 'System task',
+  tarefa_manual: 'Manual task',
+  tarefa_servico: 'Automated task',
+  tarefa_envio: 'Send',
+  tarefa_recebimento: 'Receive',
+  tarefa_regra: 'Business rule',
+  subprocesso: 'Subprocess',
+  gateway_exclusivo: 'Decision (one path)',
+  gateway_paralelo: 'Parallel',
+  gateway_inclusivo: 'Decision (one or more)',
+  gateway_evento: 'Event-based decision',
+};
+
+/** Os rótulos dos tipos no idioma pedido. */
+export function rotulosTipo(idioma: Idioma = 'pt'): Record<TipoEtapa, string> {
+  return idioma === 'en' ? ROTULOS_TIPO_EN : ROTULOS_TIPO;
+}
+
+const TIPOS_POR_GRUPO: Array<{ id: 'eventos' | 'tarefas' | 'gateways'; tipos: TipoEtapa[] }> = [
+  { id: 'eventos', tipos: ['inicio', 'fim', 'evento_intermediario', 'evento_timer', 'evento_mensagem'] },
+  { id: 'tarefas', tipos: ['tarefa_usuario', 'tarefa_manual', 'tarefa_servico', 'tarefa_envio', 'tarefa_recebimento', 'tarefa_regra', 'tarefa', 'subprocesso'] },
+  { id: 'gateways', tipos: ['gateway_exclusivo', 'gateway_paralelo', 'gateway_inclusivo', 'gateway_evento'] },
 ];
+
+const NOMES_GRUPO: Record<Idioma, Record<'eventos' | 'tarefas' | 'gateways', string>> = {
+  pt: { eventos: 'Eventos', tarefas: 'Tarefas', gateways: 'Gateways' },
+  en: { eventos: 'Events', tarefas: 'Tasks', gateways: 'Gateways' },
+};
+
+/** Os tipos agrupados como aparecem num seletor, com o nome do grupo no idioma pedido. */
+export function gruposTipo(idioma: Idioma = 'pt'): Array<{ grupo: string; tipos: TipoEtapa[] }> {
+  return TIPOS_POR_GRUPO.map((g) => ({ grupo: NOMES_GRUPO[idioma][g.id], tipos: g.tipos }));
+}
+
+export const GRUPOS_TIPO: Array<{ grupo: string; tipos: TipoEtapa[] }> = gruposTipo('pt');
 
 /** Família visual de cada tipo: decide forma e tamanho no desenho. */
 export type Familia = 'evento' | 'tarefa' | 'subprocesso' | 'gateway';
