@@ -13,6 +13,7 @@ import {
   importarBpmn,
   reconciliarComOriginal,
   renderizarBpmn,
+  temCorrecoes,
   validarMatriz,
   type Correcoes,
   type EstiloVisual,
@@ -195,7 +196,7 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
   };
 
 
-  const temCorrecao = Object.keys(correcoes.nos).length > 0 || Object.keys(correcoes.arestas).length > 0 || Object.keys(correcoes.raias).length > 0 || Boolean(correcoes.pool);
+  const temCorrecao = temCorrecoes(correcoes);
 
   return (
     <div className="visao">

@@ -30,6 +30,7 @@ import {
   renderizarReactFlow,
   renderizarSvg,
   rotear,
+  temCorrecoes,
   type Caixa,
   type Correcoes,
   type EstiloVisual,
@@ -241,7 +242,8 @@ export function VisaoReactFlow({ matriz, correcoes, estilo, aoSalvar, filhos }: 
     }
   };
 
-  const temCorrecao = Object.keys(correcoes.nos).length > 0;
+  // Conta seta, raia e pool também: "Voltar ao automático" apaga tudo, então tem de valer para tudo.
+  const temCorrecao = temCorrecoes(correcoes);
 
   return (
     <div className="visao">

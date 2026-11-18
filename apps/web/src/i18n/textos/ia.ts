@@ -107,6 +107,7 @@ export const pt = {
     lerDeNovoDica: 'As evidências desta fonte são trocadas; as chaves antigas não voltam.',
     confirmarRemover: (nome: string) => `Remover "${nome}" e as evidências tiradas dela?`,
     remover: 'Remover',
+    removida: (nome: string) => `"${nome}" foi removida.`,
   },
   evidencias: {
     titulo: 'Evidências',
@@ -224,6 +225,7 @@ export const en: typeof pt = {
     lerDeNovoDica: 'The evidence from this source is replaced; the old keys do not come back.',
     confirmarRemover: (nome: string) => `Remove "${nome}" and the evidence taken from it?`,
     remover: 'Remove',
+    removida: (nome: string) => `"${nome}" was removed.`,
   },
   evidencias: {
     titulo: 'Evidence',

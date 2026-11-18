@@ -318,7 +318,14 @@ function Fontes({
                 <td>
                   <button
                     className="link link-texto"
-                    onClick={async () => setAberta(aberta?.id === f.id ? null : { id: f.id, texto: (await apiIa.fonte(id, f.id)).texto })}
+                    onClick={async () => {
+                      if (aberta?.id === f.id) return setAberta(null);
+                      try {
+                        setAberta({ id: f.id, texto: (await apiIa.fonte(id, f.id)).texto });
+                      } catch (e) {
+                        avisar(mensagemDe(e), 'erro');
+                      }
+                    }}
                   >
                     {f.nome}
                   </button>
@@ -339,7 +346,12 @@ function Fontes({
                     className="botao botao-fantasma botao-perigo"
                     onClick={async () => {
                       if (!window.confirm(t.confirmarRemover(f.nome))) return;
-                      await apiIa.apagarFonte(id, f.id);
+                      try {
+                        await apiIa.apagarFonte(id, f.id);
+                        avisar(t.removida(f.nome), 'sucesso');
+                      } catch (e) {
+                        avisar(mensagemDe(e), 'erro');
+                      }
                       await aoMudar();
                     }}
                   >

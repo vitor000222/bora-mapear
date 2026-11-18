@@ -11,9 +11,19 @@ import {
   mesclarCorrecoes,
   renderizarBpmn,
   renderizarReactFlow,
+  temCorrecoes,
   type Correcoes,
 } from '../src/index.ts';
 import { exemplo } from './apoio.ts';
+
+test('temCorrecoes conta etapa, seta, raia e pool', () => {
+  assert.equal(temCorrecoes(correcoesVazias()), false);
+  assert.equal(temCorrecoes({ ...correcoesVazias(), pool: {} }), false);
+  assert.equal(temCorrecoes({ ...correcoesVazias(), nos: { E02: { corFundo: '#e8f5e9' } } }), true);
+  assert.equal(temCorrecoes({ ...correcoesVazias(), arestas: { Fluxo_E01_E02: { pontos: [{ x: 1, y: 2 }] } } }), true);
+  assert.equal(temCorrecoes({ ...correcoesVazias(), raias: { vendas: { altura: 200 } } }), true);
+  assert.equal(temCorrecoes({ ...correcoesVazias(), pool: { largura: 2000 } }), true);
+});
 
 test('desenho sem edição não gera correção', () => {
   const m = exemplo();

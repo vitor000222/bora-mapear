@@ -29,6 +29,16 @@ export function correcoesVazias(): Correcoes {
   return { versao: 1, nos: {}, arestas: {}, raias: {} };
 }
 
+/** Se há alguma correção guardada: de etapa, de seta, de raia ou do pool. */
+export function temCorrecoes(c: Correcoes): boolean {
+  return (
+    Object.keys(c.nos).length > 0 ||
+    Object.keys(c.arestas).length > 0 ||
+    Object.keys(c.raias).length > 0 ||
+    (c.pool !== undefined && Object.keys(c.pool).length > 0)
+  );
+}
+
 /** `b` por cima de `a`. */
 export function mesclarCorrecoes(a: Correcoes, b: Correcoes): Correcoes {
   const nos: Record<string, CorrecaoNo> = { ...a.nos };

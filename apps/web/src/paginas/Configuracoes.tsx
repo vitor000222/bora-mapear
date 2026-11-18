@@ -394,7 +394,12 @@ function ItemProvedor({ provedor: p, aoMudar }: { provedor: Provedor; aoMudar: (
           className="botao botao-fantasma botao-perigo"
           onClick={async () => {
             if (!window.confirm(t.confirmarRemover(p.nome))) return;
-            await apiIa.apagarProvedor(p.id);
+            try {
+              await apiIa.apagarProvedor(p.id);
+              avisar(t.removido(p.nome), 'sucesso');
+            } catch (e) {
+              avisar(mensagemDe(e), 'erro');
+            }
             aoMudar();
           }}
         >
