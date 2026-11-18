@@ -1,0 +1,125 @@
+import type { Etapa, Matriz, TipoEtapa } from '../matriz.ts';
+import { etapasUnicas, raiasDoDesenho } from '../layout.ts';
+import { fluxosDaMatriz, idDaRaia } from '../ids.ts';
+
+const RESERVADAS = new Set([
+  'end', 'graph', 'flowchart', 'subgraph', 'style', 'class', 'classdef', 'click', 'linkstyle', 'direction', 'default',
+]);
+
+/** Ids que o Mermaid aceita, sem colisão: `-` vira `_`, palavra reservada ganha prefixo. */
+export function idsMermaid(chaves: string[]): Map<string, string> {
+  const mapa = new Map<string, string>();
+  const usados = new Set<string>();
+  for (const chave of chaves) {
+    let id = chave.replace(/-/g, '_');
+    if (RESERVADAS.has(id.toLowerCase())) id = `n_${id}`;
+    let candidato = id;
+    for (let i = 2; usados.has(candidato); i++) candidato = `${id}_${i}`;
+    usados.add(candidato);
+    mapa.set(chave, candidato);
+  }
+  return mapa;
+}
+
+/** Texto entre aspas do Mermaid: aspas viram entidade, quebra de linha vira espaço. */
+export function textoMermaid(s: string): string {
+  const limpo = s.replace(/\s*\n\s*/g, ' ').replace(/"/g, '#quot;').trim();
+  return `"${limpo || ' '}"`;
+}
+
+function forma(e: Etapa, id: string): string {
+  const t = textoMermaid(e.nome);
+  switch (e.tipo) {
+    case 'inicio':
+    case 'evento_intermediario':
+    case 'evento_timer':
+    case 'evento_mensagem':
+      return `${id}((${t}))`;
+    case 'fim':
+      return `${id}(((${t})))`;
+    case 'subprocesso':
+      return `${id}[[${t}]]`;
+    case 'gateway_exclusivo':
+    case 'gateway_paralelo':
+    case 'gateway_inclusivo':
+    case 'gateway_evento':
+      return `${id}{${t}}`;
+    default:
+      return `${id}(${t})`;
+  }
+}
+
+const CLASSE: Record<TipoEtapa, string> = {
+  inicio: 'inicio',
+  fim: 'fim',
+  evento_intermediario: 'evento',
+  evento_timer: 'evento',
+  evento_mensagem: 'evento',
+  tarefa: 'tarefa',
+  tarefa_usuario: 'tarefa',
+  tarefa_manual: 'manual',
+  tarefa_servico: 'servico',
+  tarefa_envio: 'tarefa',
+  tarefa_recebimento: 'espera',
+  tarefa_regra: 'tarefa',
+  subprocesso: 'tarefa',
+  gateway_exclusivo: 'gateway',
+  gateway_paralelo: 'gateway',
+  gateway_inclusivo: 'gateway',
+  gateway_evento: 'gateway',
+};
+
+const ESTILOS: Record<string, string> = {
+  inicio: 'fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20',
+  fim: 'fill:#ffebee,stroke:#c62828,color:#b71c1c',
+  evento: 'fill:#fffde7,stroke:#9e9d24,color:#33691e',
+  tarefa: 'fill:#eef2ff,stroke:#4f46e5,color:#1e1b4b',
+  manual: 'fill:#fff7ed,stroke:#c2410c,color:#431407',
+  servico: 'fill:#ecfeff,stroke:#0e7490,color:#083344',
+  espera: 'fill:#fdf4ff,stroke:#a21caf,color:#4a044e',
+  gateway: 'fill:#fff8e1,stroke:#f9a825,color:#3e2723',
+};
+
+export interface OpcoesMermaid {
+  /** LR (padrão) ou TB. */
+  direcao?: 'LR' | 'TB';
+}
+
+/**
+ * Matriz → Mermaid flowchart. O Mermaid não tem raia: cada raia vira um subgraph.
+ * Não tem posição: a correção aqui é o código editado, guardado na visão.
+ */
+export function renderizarMermaid(m: Matriz, opcoes: OpcoesMermaid = {}): string {
+  const etapas = etapasUnicas(m);
+  const ids = idsMermaid(etapas.map((e) => e.chave));
+  const linhas: string[] = [];
+  linhas.push(`%% Bora Mapear · ${m.processo.nome.replace(/\n/g, ' ')}`);
+  linhas.push('%% Gerado a partir da matriz. Mudança de conteúdo vai na matriz.');
+  linhas.push(`flowchart ${opcoes.direcao ?? 'LR'}`);
+
+  for (const raia of raiasDoDesenho(m)) {
+    const daRaia = etapas.filter((e) => e.raia === raia.id);
+    if (daRaia.length === 0) continue;
+    linhas.push(`  subgraph ${idDaRaia(raia.id).replace(/-/g, '_')}[${textoMermaid(raia.nome)}]`);
+    for (const e of daRaia) linhas.push(`    ${forma(e, ids.get(e.chave)!)}`);
+    linhas.push('  end');
+  }
+
+  for (const f of fluxosDaMatriz(m)) {
+    const de = ids.get(f.de);
+    const para = ids.get(f.para);
+    if (!de || !para) continue;
+    linhas.push(f.rotulo ? `  ${de} -->|${textoMermaid(f.rotulo)}| ${para}` : `  ${de} --> ${para}`);
+  }
+
+  const porClasse = new Map<string, string[]>();
+  for (const e of etapas) {
+    const classe = CLASSE[e.tipo];
+    porClasse.set(classe, [...(porClasse.get(classe) ?? []), ids.get(e.chave)!]);
+  }
+  for (const [classe, membros] of porClasse) {
+    linhas.push(`  classDef ${classe} ${ESTILOS[classe]}`);
+    linhas.push(`  class ${membros.join(',')} ${classe}`);
+  }
+  return linhas.join('\n') + '\n';
+}

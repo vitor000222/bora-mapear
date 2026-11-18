@@ -1,0 +1,19 @@
+{
+  "name": "bora-mapear",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mapeamento de processos com IA: uma matriz, várias linguagens (BPMN, Mermaid, React Flow).",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "npm test --workspace @bora-mapear/core",
+    "typecheck": "npm run typecheck --workspace @bora-mapear/core",
+    "exemplo": "node packages/core/src/cli.ts renderizar exemplos/pedido-de-venda.json --saida saida",
+    "schema": "node packages/core/src/cli.ts schema"
+  }
+}

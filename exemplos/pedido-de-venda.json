@@ -1,0 +1,96 @@
+{
+  "versaoSchema": 1,
+  "processo": {
+    "id": "pedido-de-venda",
+    "nome": "Pedido de venda",
+    "descricao": "Do pedido do cliente ao despacho, com análise de estoque e de crédito. Exemplo fictício."
+  },
+  "raias": [
+    { "id": "cliente", "nome": "Cliente" },
+    { "id": "vendas", "nome": "Vendas" },
+    { "id": "financeiro", "nome": "Financeiro" },
+    { "id": "logistica", "nome": "Logística" }
+  ],
+  "etapas": [
+    {
+      "chave": "E01", "tipo": "inicio", "nome": "Cliente envia pedido", "raia": "cliente",
+      "sistema": "E-mail",
+      "proximos": [{ "para": "E02" }],
+      "evidencias": ["EV-001"]
+    },
+    {
+      "chave": "E02", "tipo": "tarefa_usuario", "nome": "Registrar pedido no ERP", "raia": "vendas",
+      "descricao": "O vendedor digita o pedido no ERP a partir do e-mail do cliente.",
+      "sistema": "ERP", "entrada": "E-mail do cliente", "saida": "Pedido em digitação",
+      "proximos": [{ "para": "E03" }],
+      "evidencias": ["EV-002"]
+    },
+    {
+      "chave": "E03", "tipo": "gateway_exclusivo", "nome": "Tem estoque?", "raia": "vendas",
+      "proximos": [{ "para": "E04", "rotulo": "Sim" }, { "para": "E10", "rotulo": "Não" }],
+      "evidencias": ["EV-003"]
+    },
+    {
+      "chave": "E04", "tipo": "tarefa_usuario", "nome": "Analisar crédito do cliente", "raia": "financeiro",
+      "sistema": "ERP", "regra": "Pedido acima de R$ 50 mil passa pela gerência financeira.",
+      "proximos": [{ "para": "E05" }],
+      "evidencias": ["EV-004", "EV-005"]
+    },
+    {
+      "chave": "E05", "tipo": "gateway_exclusivo", "nome": "Crédito aprovado?", "raia": "financeiro",
+      "proximos": [{ "para": "E06", "rotulo": "Sim" }, { "para": "E11", "rotulo": "Não" }],
+      "evidencias": ["EV-005"]
+    },
+    {
+      "chave": "E06", "tipo": "gateway_paralelo", "nome": "", "raia": "financeiro",
+      "proximos": [{ "para": "E07" }, { "para": "E08" }]
+    },
+    {
+      "chave": "E07", "tipo": "tarefa_manual", "nome": "Separar e embalar mercadoria", "raia": "logistica",
+      "descricao": "Separação por lista impressa, sem coletor.",
+      "proximos": [{ "para": "E09" }],
+      "evidencias": ["EV-006"], "confianca": 0.7, "revisarHumano": true
+    },
+    {
+      "chave": "E08", "tipo": "tarefa_usuario", "nome": "Emitir nota fiscal", "raia": "financeiro",
+      "sistema": "ERP",
+      "proximos": [{ "para": "E09" }],
+      "evidencias": ["EV-007"]
+    },
+    {
+      "chave": "E09", "tipo": "gateway_paralelo", "nome": "", "raia": "logistica",
+      "proximos": [{ "para": "E12" }]
+    },
+    {
+      "chave": "E10", "tipo": "tarefa_envio", "nome": "Avisar cliente sobre o prazo", "raia": "vendas",
+      "sistema": "WhatsApp",
+      "proximos": [{ "para": "E14" }],
+      "evidencias": ["EV-003"]
+    },
+    {
+      "chave": "E14", "tipo": "evento_timer", "nome": "Aguardar reposição (7 dias)", "raia": "vendas",
+      "proximos": [{ "para": "E03" }],
+      "evidencias": ["EV-003"]
+    },
+    {
+      "chave": "E11", "tipo": "tarefa_envio", "nome": "Comunicar recusa de crédito", "raia": "financeiro",
+      "sistema": "E-mail",
+      "proximos": [{ "para": "E15" }],
+      "evidencias": ["EV-005"]
+    },
+    {
+      "chave": "E15", "tipo": "fim", "nome": "Pedido recusado", "raia": "financeiro",
+      "proximos": []
+    },
+    {
+      "chave": "E12", "tipo": "tarefa_envio", "nome": "Despachar e avisar o cliente", "raia": "logistica",
+      "sistema": "E-mail",
+      "proximos": [{ "para": "E13" }],
+      "evidencias": ["EV-008"]
+    },
+    {
+      "chave": "E13", "tipo": "fim", "nome": "Pedido despachado", "raia": "logistica",
+      "proximos": []
+    }
+  ]
+}

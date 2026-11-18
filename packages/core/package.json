@@ -1,0 +1,24 @@
+{
+  "name": "@bora-mapear/core",
+  "version": "0.1.0",
+  "description": "Núcleo do Bora Mapear: matriz do processo, portão, layout, renderizadores e correções.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "bora": "./src/cli.ts"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "bpmn-moddle": "^10.0.0",
+    "typescript": "^5.9.0"
+  }
+}
