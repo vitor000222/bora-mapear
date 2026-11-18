@@ -4,6 +4,7 @@ import {
   calcularLayout,
   correcoesVazias,
   descreverCorrecoes,
+  descreverMudanca,
   extrairCorrecoesDoBpmn,
   extrairCorrecoesDoReactFlow,
   lerMatriz,
@@ -119,4 +120,26 @@ test('mesclar: a correção nova vence campo a campo', () => {
   const a: Correcoes = { versao: 1, nos: { E01: { x: 1, y: 2, corFundo: '#000' } }, arestas: {}, raias: {} };
   const b: Correcoes = { versao: 1, nos: { E01: { x: 5, y: 6 } }, arestas: {}, raias: {} };
   assert.deepEqual(mesclarCorrecoes(a, b).nos['E01'], { x: 5, y: 6, corFundo: '#000' });
+});
+
+test('a mudança entre duas gravações lista só o que mudou e o que voltou ao automático', () => {
+  const m = exemplo();
+  const auto = calcularLayout(m);
+  const antes: Correcoes = {
+    versao: 1,
+    nos: { E04: { x: auto.nos['E04']!.x + 40, y: auto.nos['E04']!.y }, E05: { corFundo: '#fff3e0' } },
+    arestas: {},
+    raias: {},
+  };
+  const depois: Correcoes = {
+    versao: 1,
+    nos: { E04: { x: auto.nos['E04']!.x + 40, y: auto.nos['E04']!.y }, E08: { corBorda: '#1565c0' } },
+    arestas: {},
+    raias: {},
+  };
+  assert.deepEqual(descreverMudanca(m, antes, depois), [
+    'Pintou "Emitir nota fiscal" (E08): borda #1565c0.',
+    'Voltou "Crédito aprovado?" (E05) ao automático.',
+  ]);
+  assert.deepEqual(descreverMudanca(m, depois, depois), []);
 });

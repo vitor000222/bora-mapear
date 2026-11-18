@@ -1,0 +1,23 @@
+{
+  "name": "@bora-mapear/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Servidor do Bora Mapear: API de mapeamentos, versões da matriz e visões, sobre SQLite.",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --disable-warning=ExperimentalWarning src/main.ts",
+    "start": "node --disable-warning=ExperimentalWarning src/main.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bora-mapear/core": "*",
+    "@hono/node-server": "^1.19.0",
+    "hono": "^4.13.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

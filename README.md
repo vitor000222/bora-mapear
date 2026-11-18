@@ -4,8 +4,7 @@
 documento do processo; os agentes montam a matriz; o Bora Mapear desenha em BPMN, Mermaid ou React Flow.
 Você corrige o desenho, e a correção fica guardada.
 
-> Status: **fase 0 — núcleo pronto**. A interface web e os agentes vêm nas próximas fases
-> ([roadmap](docs/roadmap.md)).
+> Status: **fase 1 — app local pronto**. Os agentes de IA vêm na fase 2 ([roadmap](docs/roadmap.md)).
 
 ## A ideia
 
@@ -25,12 +24,46 @@ Documentos ─► Agentes ─► MATRIZ ─► Portão ─► Mermaid · React F
 
 Detalhes em [docs/arquitetura.md](docs/arquitetura.md) e [docs/matriz.md](docs/matriz.md).
 
-## Experimente o núcleo
+## Rodar local
 
-Precisa de Node 22.18 ou mais novo (roda TypeScript direto, sem build).
+Precisa de Node 22.18 ou mais novo. Mais nada: o banco é SQLite num arquivo, com o módulo nativo do Node.
 
 ```bash
+git clone https://github.com/vitor000222/bora-mapear && cd bora-mapear
 npm install
+npm run dev
+```
+
+Abra http://127.0.0.1:5173. O banco fica em `data/bora.db` e é criado sozinho.
+
+Para usar sem modo de desenvolvimento, numa porta só:
+
+```bash
+npm run build
+npm start          # http://127.0.0.1:3737
+```
+
+| Variável | Padrão | Para quê |
+|---|---|---|
+| `PORTA` | `3737` | porta do servidor |
+| `HOST` | `127.0.0.1` | troque para `0.0.0.0` para abrir na rede |
+| `BORA_DB` | `data/bora.db` | caminho do arquivo do banco |
+
+### O que dá para fazer
+
+- Criar mapeamentos em branco ou pelo exemplo, escolhendo a linguagem (dá para trocar depois).
+- Editar a **matriz** como planilha: raias, etapas, tipo, raia, sistema e próximos. O portão confere enquanto
+  você digita e aponta a linha com problema. Cada gravação vira uma **versão**, e qualquer versão pode ser
+  restaurada.
+- **BPMN**: editar no bpmn-js (arrastar, redimensionar, pintar, redesenhar setas), baixar `.bpmn` e SVG.
+- **React Flow**: arrastar e pintar, com as setas traçadas pelo mesmo roteador do BPMN.
+- **Mermaid**: ver o desenho e editar o código à mão, com prévia ao vivo.
+- **Salvar correções**: só o que você mudou na forma é guardado, por chave, e sobrevive às próximas versões da
+  matriz. Cada gravação vira frases no **registro de correções** ("Moveu *Analisar crédito* 60 px para a direita").
+
+## O núcleo sozinho
+
+```bash
 npm run exemplo
 ```
 
@@ -68,9 +101,12 @@ npm run typecheck
 packages/core/        núcleo: matriz, portão, layout, renderizadores, correções, CLI
   src/matriz.ts       schema da matriz (Zod) e JSON Schema para os agentes
   src/validar.ts      o portão
-  src/layout.ts       layout automático em raias
-  src/correcoes.ts    aplicar, extrair e descrever correções
+  src/layout.ts       layout automático em raias e roteador de setas
+  src/correcoes.ts    aplicar, extrair, comparar e descrever correções
   src/renderizadores/ bpmn.ts · mermaid.ts · reactflow.ts
+apps/server/          API (Hono) sobre SQLite: mapeamentos, versões, visões, registro
+apps/web/             interface (Vite + React): lista, grade da matriz, bpmn-js, React Flow, Mermaid
+scripts/dev.ts        sobe API e interface juntas
 exemplos/             matrizes de exemplo
 docs/                 arquitetura, matriz, roadmap
 ```

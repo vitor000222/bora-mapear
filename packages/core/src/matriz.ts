@@ -23,6 +23,36 @@ export const TIPOS_ETAPA = [
 
 export type TipoEtapa = (typeof TIPOS_ETAPA)[number];
 
+/** Nome de cada tipo para gente ler, agrupado como aparece num seletor. */
+export const ROTULOS_TIPO: Record<TipoEtapa, string> = {
+  inicio: 'Início',
+  fim: 'Fim',
+  evento_intermediario: 'Marco intermediário',
+  evento_timer: 'Espera de prazo',
+  evento_mensagem: 'Espera de mensagem',
+  tarefa: 'Tarefa',
+  tarefa_usuario: 'Tarefa com sistema',
+  tarefa_manual: 'Tarefa manual',
+  tarefa_servico: 'Tarefa automática',
+  tarefa_envio: 'Envio',
+  tarefa_recebimento: 'Recebimento',
+  tarefa_regra: 'Regra de negócio',
+  subprocesso: 'Subprocesso',
+  gateway_exclusivo: 'Decisão (um caminho)',
+  gateway_paralelo: 'Paralelo',
+  gateway_inclusivo: 'Decisão (um ou mais)',
+  gateway_evento: 'Decisão por evento',
+};
+
+export const GRUPOS_TIPO: Array<{ grupo: string; tipos: TipoEtapa[] }> = [
+  { grupo: 'Eventos', tipos: ['inicio', 'fim', 'evento_intermediario', 'evento_timer', 'evento_mensagem'] },
+  {
+    grupo: 'Tarefas',
+    tipos: ['tarefa_usuario', 'tarefa_manual', 'tarefa_servico', 'tarefa_envio', 'tarefa_recebimento', 'tarefa_regra', 'tarefa', 'subprocesso'],
+  },
+  { grupo: 'Gateways', tipos: ['gateway_exclusivo', 'gateway_paralelo', 'gateway_inclusivo', 'gateway_evento'] },
+];
+
 /** Família visual de cada tipo: decide forma e tamanho no desenho. */
 export type Familia = 'evento' | 'tarefa' | 'subprocesso' | 'gateway';
 

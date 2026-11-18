@@ -1,0 +1,29 @@
+{
+  "name": "@bora-mapear/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interface do Bora Mapear.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bora-mapear/core": "*",
+    "@xyflow/react": "^12.12.0",
+    "bpmn-js": "^18.33.0",
+    "bpmn-js-color-picker": "^0.7.2",
+    "mermaid": "^11.17.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.3.0"
+  }
+}

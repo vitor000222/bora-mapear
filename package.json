@@ -5,14 +5,18 @@
   "description": "Mapeamento de processos com IA: uma matriz, várias linguagens (BPMN, Mermaid, React Flow).",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "engines": {
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "npm test --workspace @bora-mapear/core",
-    "typecheck": "npm run typecheck --workspace @bora-mapear/core",
+    "dev": "node scripts/dev.ts",
+    "build": "npm run build --workspace @bora-mapear/web",
+    "start": "npm run start --workspace @bora-mapear/server",
+    "test": "npm test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "exemplo": "node packages/core/src/cli.ts renderizar exemplos/pedido-de-venda.json --saida saida",
     "schema": "node packages/core/src/cli.ts schema"
   }

@@ -100,9 +100,11 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
 
 ## Banco
 
-- **Padrão: SQLite num arquivo** (`data/bora.db`). Clonou, instalou, rodou.
-- **Opcional: Postgres** via `DATABASE_URL` — o banco do próprio usuário ou o do `docker compose`.
-- Uma camada de acesso só (Kysely), com migrações para os dois dialetos.
+- **Padrão: SQLite num arquivo** (`data/bora.db`), com o módulo `node:sqlite` do próprio Node: nada para
+  compilar, nem no Windows. Clonou, instalou, rodou.
+- **Opcional (fase 4): Postgres** via `DATABASE_URL` — o banco do próprio usuário ou o do `docker compose`.
+- O servidor fala com o banco por uma interface só (`Repositorio`, assíncrona). O Postgres entra como outra
+  implementação dela.
 - Matriz e correções gravadas como documento JSON. Versões de matriz são imutáveis.
 
 | Tabela | Guarda |
@@ -124,11 +126,11 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
 | Linguagem | TypeScript em tudo | um idioma no front, no back e nos renderizadores; o renderizador roda no navegador e no servidor |
 | Monorepo | npm workspaces | já vem com o Node |
 | Núcleo | `packages/core` | matriz, portão, layout, renderizadores e correções; sem dependência de interface |
-| Front | Vite + React | — |
+| Front | Vite + React, roteamento por hash | — |
 | Editores | bpmn-js, @xyflow/react, mermaid + CodeMirror, grade para a matriz | padrões de mercado |
 | Servidor | Hono sobre Node | leve, TypeScript nativo |
 | IA | Vercel AI SDK | um contrato para OpenRouter, OpenAI-compatível, Anthropic, Google e Ollama |
-| Banco | SQLite ou Postgres, via Kysely | — |
+| Banco | SQLite (`node:sqlite`); Postgres na fase 4 | sem dependência nativa |
 | Testes | `node:test` | sem dependência |
 
 ## Licenças de terceiros que pesam
@@ -137,15 +139,15 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
   Não remover.
 - **React Flow** e **Mermaid**: MIT.
 
-## Rodar local (meta da fase 1)
+## Rodar local
 
 ```bash
-git clone https://github.com/<org>/bora-mapear && cd bora-mapear
+git clone https://github.com/vitor000222/bora-mapear && cd bora-mapear
 npm install
-npm run dev        # abre em http://localhost:5173, cria data/bora.db sozinho
+npm run dev        # abre em http://127.0.0.1:5173, cria data/bora.db sozinho
 ```
 
-Para Postgres: `DATABASE_URL=postgres://… npm run dev`.
+Postgres via `DATABASE_URL` chega na fase 4.
 
 ## Hospedar depois (boramapear)
 

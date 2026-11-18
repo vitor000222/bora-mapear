@@ -10,16 +10,19 @@
 - [x] CLI: `validar`, `renderizar`, `extrair`, `schema`
 - [x] Testes com `node:test`
 
-## Fase 1 — App local
+## Fase 1 — App local ✅
 
-- [ ] `apps/server`: Hono + SQLite (arquivo), API de mapeamentos, versões e visões
-- [ ] `apps/web`: Vite + React
-  - [ ] Lista de mapeamentos; criar escolhendo a linguagem
-  - [ ] Grade da matriz (editar linha, raia, saídas)
-  - [ ] Visão Mermaid (código + prévia), React Flow (arrastar), BPMN (bpmn-js) e XML (código)
-  - [ ] Salvar correções e o registro de cada uma
-  - [ ] Histórico de versões da matriz
-- [ ] `npm run dev` sobe tudo
+- [x] `apps/server`: Hono + SQLite (módulo nativo do Node), API de mapeamentos, versões, visões e registro
+- [x] `apps/web`: Vite + React
+  - [x] Lista de mapeamentos; criar escolhendo a linguagem, em branco ou pelo exemplo
+  - [x] Grade da matriz com o portão ao vivo (editar raias, etapas, tipo, saídas, detalhes)
+  - [x] Visão BPMN (bpmn-js, com cor) e XML; React Flow (arrastar, pintar, setas com o roteador do núcleo); Mermaid (desenho, código editável com prévia)
+  - [x] Salvar correções e registrar em frases o que mudou em cada gravação
+  - [x] Histórico de versões da matriz, com restaurar
+- [x] `npm run dev` sobe tudo; `npm run build` + `npm start` numa porta só
+
+Ficou para depois: correção de rota de seta no React Flow, rótulo de seta movido no bpmn-js e correções
+compartilhadas entre BPMN e React Flow.
 
 ## Fase 2 — Agentes
 

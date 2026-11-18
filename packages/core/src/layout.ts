@@ -69,9 +69,9 @@ export const GRADE = {
 
 /** Caixa estimada de um texto curto, quebrado na largura dos rótulos do bpmn-js. */
 export function medirRotulo(texto: string): { largura: number; altura: number } {
-  const larguraTexto = texto.length * 6;
+  const larguraTexto = texto.length * 7 + 6;
   return {
-    largura: Math.max(20, Math.min(GRADE.rotuloLargura, larguraTexto)),
+    largura: Math.max(24, Math.min(GRADE.rotuloLargura, larguraTexto)),
     altura: Math.ceil(Math.max(1, larguraTexto) / GRADE.rotuloLargura) * GRADE.rotuloLinha,
   };
 }

@@ -279,3 +279,43 @@ export function descreverCorrecoes(m: Matriz, c: Correcoes): string[] {
   if (c.pool) frases.push('Ajustou o contorno do processo.');
   return frases;
 }
+
+export interface DiferencaCorrecoes {
+  /** O que entrou ou mudou nesta gravação. */
+  mudou: Correcoes;
+  /** Ids que tinham correção e voltaram ao automático. */
+  desfeitas: { nos: string[]; arestas: string[]; raias: string[]; pool: boolean };
+}
+
+const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** O que mudou de uma gravação de correções para a seguinte. */
+export function diferencaCorrecoes(antes: Correcoes, depois: Correcoes): DiferencaCorrecoes {
+  const mudou = correcoesVazias();
+  for (const [k, v] of Object.entries(depois.nos)) if (!igual(antes.nos[k], v)) mudou.nos[k] = v;
+  for (const [k, v] of Object.entries(depois.arestas)) if (!igual(antes.arestas[k], v)) mudou.arestas[k] = v;
+  for (const [k, v] of Object.entries(depois.raias)) if (!igual(antes.raias[k], v)) mudou.raias[k] = v;
+  if (depois.pool && !igual(antes.pool, depois.pool)) mudou.pool = depois.pool;
+  return {
+    mudou,
+    desfeitas: {
+      nos: Object.keys(antes.nos).filter((k) => !(k in depois.nos)),
+      arestas: Object.keys(antes.arestas).filter((k) => !(k in depois.arestas)),
+      raias: Object.keys(antes.raias).filter((k) => !(k in depois.raias)),
+      pool: Boolean(antes.pool && !depois.pool),
+    },
+  };
+}
+
+/** As frases do registro de uma gravação: o que o usuário fez desde a última vez. */
+export function descreverMudanca(m: Matriz, antes: Correcoes, depois: Correcoes): string[] {
+  const { mudou, desfeitas } = diferencaCorrecoes(antes, depois);
+  const nomes = new Map(etapasUnicas(m).map((e) => [e.chave, e.nome ? `"${e.nome}" (${e.chave})` : e.chave]));
+  const nomesRaia = new Map(raiasDoDesenho(m).map((r) => [r.id, `"${r.nome}"`]));
+  const frases = descreverCorrecoes(m, mudou);
+  for (const k of desfeitas.nos) frases.push(`Voltou ${nomes.get(k) ?? k} ao automático.`);
+  for (const k of desfeitas.arestas) frases.push(`Voltou a seta ${k} ao traçado automático.`);
+  for (const k of desfeitas.raias) frases.push(`Voltou a raia ${nomesRaia.get(k) ?? k} ao automático.`);
+  if (desfeitas.pool) frases.push('Voltou o contorno do processo ao automático.');
+  return frases;
+}
