@@ -1,5 +1,7 @@
 # A matriz do processo
 
+[English](matrix.md) · **Português**
+
 A matriz é o que o Bora Mapear guarda. Todo desenho sai dela. O schema oficial está em
 [`packages/core/src/matriz.ts`](../packages/core/src/matriz.ts); o JSON Schema sai com
 `npm run schema`.
@@ -48,10 +50,19 @@ A matriz é o que o Bora Mapear guarda. Todo desenho sai dela. O schema oficial 
 
 ## Em CSV
 
-A mesma matriz vira planilha (`;` como separador, uma linha por etapa) e volta. As colunas são as dos campos
-acima, em minúsculas e com `_` (`revisar_humano`); `proximos` fica como `E04: Sim, E10: Não`. O tipo pode vir
-pelo código (`gateway_exclusivo`) ou pelo rótulo ("Decisão (um caminho)"), e a confiança aceita vírgula
-decimal. Raias sem etapa vão numa linha de comentário no fim (`# raias sem etapa: …`).
+A mesma matriz vira planilha (uma linha por etapa) e volta. A exportação segue o idioma da interface:
+
+| | Interface em português | Interface em inglês |
+|---|---|---|
+| Separador | `;` | `,` |
+| Colunas | os nomes dos campos acima: `chave`, `tipo`, `proximos`, `revisar_humano`… | em inglês: `key`, `type`, `next`, `human_review`… |
+| Tipo | rótulo em português ("Decisão (um caminho)") | rótulo em inglês ("Decision (one path)") |
+| Confiança | vírgula decimal (`0,8`) | ponto decimal (`0.8`) |
+| Raias sem etapa | linha de comentário no fim: `# raias sem etapa: …` | `# lanes without steps: …` |
+
+`proximos` fica como `E04: Sim, E10: Não`; os rótulos são conteúdo da matriz e não são traduzidos. A importação
+aceita tudo isso, qualquer que seja o idioma da interface: os dois separadores, colunas nos dois idiomas, o tipo
+pelo código (`gateway_exclusivo`) ou pelo rótulo nos dois idiomas, e vírgula ou ponto decimal.
 
 ## Tipos
 

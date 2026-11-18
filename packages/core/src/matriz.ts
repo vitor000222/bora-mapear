@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Idioma } from './idioma.ts';
 
-/** Os tipos de elemento que uma linha da matriz pode ter. Ver docs/matriz.md. */
+/** Os tipos de elemento que uma linha da matriz pode ter. Ver docs/matrix.md. */
 export const TIPOS_ETAPA = [
   'inicio',
   'fim',
@@ -113,7 +113,7 @@ export const EtapaSchema = z.object({
     .string()
     .regex(CHAVE, 'A chave começa com letra e só tem letras, números, _ e -.')
     .describe('Chave estável da linha. Nunca reaproveitada. Vira o id do elemento no desenho.'),
-  tipo: z.enum(TIPOS_ETAPA).describe('Tipo do elemento. Ver docs/matriz.md.'),
+  tipo: z.enum(TIPOS_ETAPA).describe('Tipo do elemento. Ver docs/matrix.pt-BR.md.'),
   nome: z.string().describe('Verbo no infinitivo + objeto, no vocabulário de quem faz. Em gateway de decisão, a pergunta.'),
   raia: z.string().min(1).describe('Id da raia. Raia é função, não pessoa.'),
   descricao: z.string().optional().describe('Uma ou duas frases. Vira a documentação do elemento.'),

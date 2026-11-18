@@ -1,68 +1,71 @@
 # Roadmap
 
-## Fase 0 — Núcleo ✅
+**English** · [Português](roadmap.pt-BR.md)
 
-- [x] Schema da matriz (Zod) e JSON Schema para os agentes
-- [x] Portão: validação determinística com mensagens para o agente corrigir
-- [x] Layout automático em raias, determinístico: laços por cima, setas que desviam das etapas, rótulos encostados na saída
-- [x] Renderizadores: Mermaid, React Flow (nós e arestas) e BPMN 2.0 com diagrama (abre no bpmn-js e no Camunda Modeler)
-- [x] Correções: aplicar na renderização, extrair do BPMN editado e do React Flow, descrever em frases
+## Phase 0 — Core ✅
+
+- [x] Matrix schema (Zod) and JSON Schema for the agents
+- [x] Gate: deterministic validation, with messages written for the agent to fix
+- [x] Automatic layout in lanes, deterministic: loops go over the top, arrows route around the steps, labels placed right where the arrow leaves
+- [x] Renderers: Mermaid, React Flow (nodes and edges) and BPMN 2.0 with diagram (opens in bpmn-js and in Camunda Modeler)
+- [x] Corrections: apply them in the render, extract them from the edited BPMN and from React Flow, describe them in sentences
 - [x] CLI: `validar`, `renderizar`, `extrair`, `schema`
-- [x] Testes com `node:test`
+- [x] Tests with `node:test`
 
-## Fase 1 — App local ✅
+## Phase 1 — Local app ✅
 
-- [x] `apps/server`: Hono + SQLite (módulo nativo do Node), API de mapeamentos, versões, visões e registro
+- [x] `apps/server`: Hono + SQLite (Node's built-in module), API for process maps, versions, views and the correction log
 - [x] `apps/web`: Vite + React
-  - [x] Lista de mapeamentos; criar escolhendo a linguagem, em branco ou pelo exemplo
-  - [x] Grade da matriz com o portão ao vivo (editar raias, etapas, tipo, saídas, detalhes)
-  - [x] Visão BPMN (bpmn-js, com cor) e XML; React Flow (arrastar, pintar, setas com o roteador do núcleo); Mermaid (desenho, código editável com prévia)
-  - [x] Salvar correções e registrar em frases o que mudou em cada gravação
-  - [x] Histórico de versões da matriz, com restaurar
-- [x] `npm run dev` sobe tudo; `npm run build` + `npm start` numa porta só
+  - [x] List of process maps; create one by choosing the notation, blank or from the example
+  - [x] Matrix grid with the live gate (edit lanes, steps, type, outgoing flows, details)
+  - [x] BPMN view (bpmn-js, with color) and XML; React Flow (drag, color, arrows with the core router); Mermaid (diagram, editable code with preview)
+  - [x] Save corrections and log in sentences what changed in each save
+  - [x] Matrix version history, with restore
+- [x] `npm run dev` starts everything; `npm run build` + `npm start` on a single port
 
-Ficou para depois: correção de rota de seta no React Flow, rótulo de seta movido no bpmn-js e correções
-compartilhadas entre BPMN e React Flow.
+Left for later: arrow route corrections in React Flow, moved arrow labels in bpmn-js, and corrections shared
+between BPMN and React Flow.
 
-## Fase 2 — Agentes ✅
+## Phase 2 — Agents ✅
 
-- [x] Cadastro de provedores (OpenRouter, OpenAI-compatível, Anthropic, Google, Groq, DeepSeek, Ollama, LM Studio) com chave cifrada, teste de conexão e lista de modelos
-- [x] Modelo por agente, com um padrão
-- [x] Leitor: PDF, DOCX, TXT, MD, VTT/SRT → evidências numeradas, cada citação conferida contra a fonte
-- [x] Mapeador + portão em laço (até três rodadas)
-- [x] Revisor: lacunas com a pergunta para o cliente, linhas para revisão humana, conferências automáticas
-- [x] Editor: pedido em português → operações sobre a matriz, aplicadas por código
-- [x] Execuções em segundo plano, com progresso, tokens e custo; propostas aplicadas como versão ou revisadas antes
-- [x] Provedor falso para testar sem chave
+- [x] Provider registry (OpenRouter, OpenAI-compatible, Anthropic, Google, Groq, DeepSeek, Ollama, LM Studio) with encrypted key, connection test and model list
+- [x] Model per agent, with a default
+- [x] Reader: PDF, DOCX, TXT, MD, VTT/SRT → numbered evidence, each quote checked against the source
+- [x] Mapper + gate in a loop (up to three rounds)
+- [x] Reviewer: gaps with the question for the client, rows for human review, automatic checks
+- [x] Editor: request in Portuguese → operations on the matrix, applied by code
+- [x] Runs in the background, with progress, tokens and cost; proposals applied as a version or reviewed first
+- [x] Fake provider for testing without a key
 
-Ficou para depois: transcrever áudio e vídeo, OCR de PDF escaneado, e cancelar uma execução em andamento.
+Left for later: transcribing audio and video, OCR of scanned PDFs, and canceling a run in progress.
 
-## Fase 3 — Aprender com a correção ✅
+## Phase 3 — Learning from corrections ✅
 
-- [x] Agente Visual: aprende regras de estilo (cor por tipo, família, raia, revisão) a partir das cores aplicadas e do registro de correções; "Aplicar meu estilo" em BPMN, React Flow e Mermaid
-- [x] Importador BPMN → matriz, determinístico: edição de conteúdo no bpmn-js vira proposta de nova versão, com o que mudou em frases
-- [x] Importador Mermaid → matriz, determinístico; o que ele não lê vai para o agente Conversor
-- [x] Importar processo de outra ferramenta (BPMN, Mermaid, ou qualquer texto pelo Conversor)
-- [x] Comparar duas matrizes em frases
+- [x] Visual agent: learns style rules (color by type, family, lane, review) from the colors applied and the correction log; "Apply my style" in BPMN, React Flow and Mermaid
+- [x] BPMN → matrix importer, deterministic: a content edit in bpmn-js becomes a proposed new version, with what changed in sentences
+- [x] Mermaid → matrix importer, deterministic; what it does not read goes to the Converter agent
+- [x] Import a process from another tool (BPMN, Mermaid, or any text through the Converter)
+- [x] Compare two matrices in sentences
 
-Ficou para depois: estilo de espaçamento e de ordem das raias, e posições aprendidas (hoje o estilo é só de cor).
+Left for later: style for spacing and lane order, and learned positions (today the style is color only).
 
-## Fase 4 — Para usar de verdade ✅
+## Phase 4 — Ready for real use ✅
 
-- [x] Postgres via `DATABASE_URL` (driver `pg`), com os testes da API rodando em SQLite e em Postgres (PGlite)
-- [x] `Dockerfile` e `docker compose` com Postgres
-- [x] Exportar SVG, PNG e PDF (vetorial) nas três linguagens
-- [x] Importar e exportar a matriz em CSV, que abre no Excel e no Google Planilhas
-- [x] Subprocesso que abre o mapeamento filho: criar o filho pela matriz, ligar a um que já existe, duplo clique no desenho para abrir, faixa "Subprocesso de" no filho
-- [x] Interface em inglês: seletor no topo; telas, portão, avisos dos importadores, registro de correções, erros do servidor, exemplo e CSV no idioma escolhido; com a interface em inglês, os agentes escrevem em inglês
-- [x] README em inglês (`README.md`), com a versão em português em `README.pt-BR.md`
+- [x] Postgres through `DATABASE_URL` (`pg` driver), with the API tests running on SQLite and on Postgres (PGlite)
+- [x] `Dockerfile` and `docker compose` with Postgres
+- [x] Export SVG, PNG and PDF (vector) in all three notations
+- [x] Import and export the matrix as CSV, which opens in Excel and Google Sheets
+- [x] Subprocess that opens the child map: create the child from the matrix, link to one that already exists, double-click in the diagram to open it, "Subprocess of" banner in the child
+- [x] English interface: selector at the top; screens, gate, importer warnings, correction log, server errors, example and CSV in the chosen language; with the interface in English, the agents write in English
+- [x] English README (`README.md`), with the Portuguese version in `README.pt-BR.md`
+- [x] English documentation in `docs/` (architecture, matrix, roadmap), with the Portuguese versions in `*.pt-BR.md`
 
-Ficou para depois: o `docker compose` ainda não foi rodado de ponta a ponta (o Postgres em si é coberto pela
-suíte sobre PGlite); importar XLSX direto, sem passar por CSV; a documentação de `docs/` em inglês; a linha de
-comando (`cli.ts`) continua só em português.
+Left for later: `docker compose` has not been run end to end yet (Postgres itself is covered by the suite on
+PGlite); importing XLSX directly, without going through CSV; the command line (`cli.ts`) is still Portuguese
+only.
 
-## Fase 5 — Na nuvem
+## Phase 5 — In the cloud
 
-- [ ] Modo `nuvem`: login, workspaces, papéis
-- [ ] Colaboração e comentários
-- [ ] Domínio próprio
+- [ ] `nuvem` (cloud) mode: login, workspaces, roles
+- [ ] Collaboration and comments
+- [ ] Custom domain

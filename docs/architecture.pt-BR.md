@@ -1,5 +1,7 @@
 # Arquitetura do Bora Mapear
 
+[English](architecture.md) · **Português**
+
 ## A ideia em uma frase
 
 **A matriz do processo é a fonte da verdade.** Mermaid, React Flow e BPMN são formas de desenhar a
@@ -40,7 +42,7 @@ mesma matriz. A IA escreve linhas da matriz. Nenhum modelo escreve XML, código 
 | Conceito | O que é |
 |---|---|
 | **Mapeamento** | O documento. Tem nome, linguagem preferida e versões da matriz. |
-| **Matriz** | Uma linha por elemento do processo (evento, tarefa, decisão). Cada linha tem uma chave estável. Ver [matriz.md](matriz.md). |
+| **Matriz** | Uma linha por elemento do processo (evento, tarefa, decisão). Cada linha tem uma chave estável. Ver [matrix.pt-BR.md](matrix.pt-BR.md). |
 | **Linguagem** | Uma forma de desenhar: Mermaid, React Flow ou BPMN 2.0. O BPMN tem duas vistas: a visual (bpmn-js, o mesmo editor do Camunda Modeler) e a de código (XML). |
 | **Visão** | Um mapeamento desenhado numa linguagem, com as correções dele. |
 | **Correções** | O que o usuário mudou na forma do desenho, chaveado pela chave da linha. Não mexem no conteúdo. |
@@ -77,9 +79,10 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
   `renderizarSvg` do núcleo, que desenha a matriz com as posições atuais dos nós em SVG puro.
 - PNG é o SVG num `canvas` a 2x, fundo branco. PDF é vetorial (jsPDF + svg2pdf.js, carregados só quando
   alguém pede), do tamanho exato do desenho, com o texto selecionável.
-- **CSV** é a matriz em planilha (`matrizParaCsv` / `csvParaMatriz`): separador `;`, BOM para o Excel abrir
-  com acento, uma linha por etapa, `proximos` como `E04: Sim, E10: Não`. Na volta aceita o tipo pelo
-  código ou pelo rótulo e vírgula decimal na confiança. A grade da Matriz exporta e importa; a lista
+- **CSV** é a matriz em planilha (`matrizParaCsv` / `csvParaMatriz`): BOM para o Excel abrir com acento,
+  uma linha por etapa, `proximos` como `E04: Sim, E10: Não`. Separador, nomes das colunas e rótulos dos tipos
+  seguem o idioma da interface (`;` e português em português; `,` e inglês em inglês); na volta aceita os dois,
+  o tipo pelo código ou pelo rótulo, e vírgula ou ponto decimal na confiança. A grade da Matriz exporta e importa; a lista
   importa como mapeamento novo.
 
 ## Agentes

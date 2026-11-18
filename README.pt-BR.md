@@ -6,7 +6,7 @@
 documento do processo; os agentes montam a matriz; o Bora Mapear desenha em BPMN, Mermaid ou React Flow.
 Você corrige o desenho, e a correção fica guardada.
 
-> Status: **fase 4 — Postgres, exportar em SVG/PNG/PDF, matriz em CSV, subprocessos e interface em inglês**. Próximo: modo nuvem ([roadmap](docs/roadmap.md)).
+> Status: **fase 4 — Postgres, exportar em SVG/PNG/PDF, matriz em CSV, subprocessos e interface em inglês**. Próximo: modo nuvem ([roadmap](docs/roadmap.pt-BR.md)).
 
 ## A ideia
 
@@ -24,7 +24,7 @@ Documentos ─► Agentes ─► MATRIZ ─► Portão ─► Mermaid · React F
 - **Sua chave, seu banco.** Você usa a sua chave de API (OpenRouter ou qualquer provedor compatível) e
   roda local, com SQLite, ou no seu Postgres.
 
-Detalhes em [docs/arquitetura.md](docs/arquitetura.md) e [docs/matriz.md](docs/matriz.md).
+Detalhes em [docs/architecture.pt-BR.md](docs/architecture.pt-BR.md) e [docs/matrix.pt-BR.md](docs/matrix.pt-BR.md).
 
 ## Rodar local
 

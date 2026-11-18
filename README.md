@@ -11,8 +11,8 @@ kept.
 > Status: **phase 4 — Postgres, SVG/PNG/PDF export, matrix as CSV, subprocesses and an English interface**. Next:
 > cloud mode ([roadmap](docs/roadmap.md)).
 >
-> The interface comes in Portuguese and English: pick one in the selector at the top. The docs in `docs/` and the
-> code itself are in Portuguese for now.
+> The interface comes in Portuguese and English: pick one in the selector at the top. The code itself is in
+> Portuguese for now.
 
 ## The idea
 
@@ -24,14 +24,13 @@ Documents ─► Agents ─► MATRIX ─► Gate ─► Mermaid · React Flow �
 
 - **The matrix is the source of truth.** One row per step, with a stable key, lane, type and outgoing flows.
 - **AI writes matrix rows, never XML.** The diagram comes out of a deterministic renderer.
-- **Switching diagram languages is just a re-render.** The same matrix becomes BPMN, Mermaid or React Flow.
+- **Switching notations is just a re-render.** The same matrix becomes BPMN, Mermaid or React Flow.
 - **A visual fix is data.** Moved a box, colored it, rerouted an arrow: it is stored by key and survives the next
   version of the matrix.
 - **Your key, your database.** You use your own API key (OpenRouter or any compatible provider) and run it
   locally, with SQLite, or on your own Postgres.
 
-Details (in Portuguese) in [docs/arquitetura.md](docs/arquitetura.md) (architecture) and
-[docs/matriz.md](docs/matriz.md) (the matrix).
+Details in [docs/architecture.md](docs/architecture.md) and [docs/matrix.md](docs/matrix.md).
 
 ## Run locally
 
@@ -76,7 +75,7 @@ Keep your `BORA_SECRET` safe: without it, the API keys you registered can no lon
 
 ### What you can do
 
-- Create process maps from scratch or from the example, choosing the diagram language (you can switch later).
+- Create process maps from scratch or from the example, choosing the diagram notation (you can switch later).
 - Edit the **matrix** like a spreadsheet: lanes, steps, type, lane, system and next steps. The gate checks it as
   you type and points at the row with the problem. Every save becomes a **version**, and any version can be
   restored.
@@ -86,7 +85,7 @@ Keep your `BORA_SECRET` safe: without it, the API keys you registered can no lon
 - **Save corrections**: only what you changed in the layout is stored, by key, and it survives the next versions
   of the matrix. Each save turns into sentences in the **correction log** ("Moved *Check customer credit* 60 px
   to the right").
-- **Export** the diagram as SVG, PNG or PDF (vector, with selectable text), in all three diagram languages.
+- **Export** the diagram as SVG, PNG or PDF (vector, with selectable text), in all three notations.
 - **Matrix as a spreadsheet**: "Export CSV" opens in Excel and Google Sheets; edit it there and bring it back with
   "Import CSV". What comes back goes through the gate and only becomes a version when you save.
 - **Subprocesses**: on a subprocess step, "Create child map" opens a new process map to detail it (or links one
@@ -206,7 +205,7 @@ apps/web/             interface (Vite + React): list, matrix, bpmn-js, React Flo
 scripts/dev.ts        starts the API and the interface together
 scripts/llm-falso.ts  fake provider for testing the agents without a key
 exemplos/             example matrices
-docs/                 architecture, matrix, roadmap (in Portuguese)
+docs/                 architecture, matrix, roadmap
 ```
 
 ## License
