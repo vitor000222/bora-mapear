@@ -1,8 +1,9 @@
 {
   "name": "@bora-mapear/server",
   "version": "0.1.0",
+  "license": "AGPL-3.0-only",
   "private": true,
-  "description": "Servidor do Bora Mapear: API de mapeamentos, versões da matriz e visões, sobre SQLite.",
+  "description": "Servidor do Bora Mapear: API de mapeamentos, versões da matriz e visões, sobre SQLite ou Postgres.",
   "type": "module",
   "scripts": {
     "dev": "node --watch --disable-warning=ExperimentalWarning src/main.ts",

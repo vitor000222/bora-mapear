@@ -183,4 +183,12 @@ docs/                 arquitetura, matriz, roadmap
 
 ## Licença
 
-A definir.
+[GNU AGPL-3.0](LICENSE). Em resumo:
+
+- Você pode usar, estudar, modificar e redistribuir o Bora Mapear, inclusive para fins comerciais.
+- Se distribuir uma versão modificada **ou oferecê-la como serviço pela rede**, tem de disponibilizar o
+  código-fonte dela, sob a mesma licença, para quem a usa. No app, o link **Código-fonte** no topo serve para
+  isso: num fork hospedado, aponte-o para o seu repositório.
+- Usar sem modificar, no seu computador ou na sua empresa, não cria obrigação nenhuma.
+
+O resumo não substitui o texto da licença.

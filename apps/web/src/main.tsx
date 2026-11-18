@@ -6,6 +6,10 @@ import { PaginaMapeamento } from './paginas/PaginaMapeamento.tsx';
 import { Configuracoes } from './paginas/Configuracoes.tsx';
 import './estilos.css';
 
+// AGPL-3.0, seção 13: quem usa o app pela rede tem direito ao código-fonte da versão que está rodando.
+// Num fork hospedado, aponte para o repositório do fork.
+const CODIGO_FONTE = 'https://github.com/vitor000222/bora-mapear';
+
 function useHash(): string {
   const [hash, setHash] = useState(() => window.location.hash);
   useEffect(() => {
@@ -35,6 +39,9 @@ function App() {
           </a>
           <a href="#/config" aria-current={hash === '#/config' ? 'page' : undefined}>
             Configurações
+          </a>
+          <a href={CODIGO_FONTE} target="_blank" rel="noreferrer" title="Código-fonte (AGPL-3.0)">
+            Código-fonte
           </a>
         </nav>
       </header>

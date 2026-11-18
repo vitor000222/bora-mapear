@@ -1,6 +1,7 @@
 {
   "name": "bora-mapear",
   "version": "0.1.0",
+  "license": "AGPL-3.0-only",
   "private": true,
   "description": "Mapeamento de processos com IA: uma matriz, várias linguagens (BPMN, Mermaid, React Flow).",
   "type": "module",

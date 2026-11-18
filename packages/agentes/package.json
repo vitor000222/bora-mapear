@@ -1,6 +1,7 @@
 {
   "name": "@bora-mapear/agentes",
   "version": "0.1.0",
+  "license": "AGPL-3.0-only",
   "description": "Agentes do Bora Mapear: Leitor, Mapeador, Revisor e Editor, com a chave de API do usuário.",
   "type": "module",
   "exports": {

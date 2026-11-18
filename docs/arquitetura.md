@@ -158,6 +158,11 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
 | Exportar | SVG do próprio desenho; PNG pelo canvas; PDF por jsPDF + svg2pdf.js | sem servidor de renderização |
 | Testes | `node:test` | sem dependência |
 
+## Licença
+
+O Bora Mapear é AGPL-3.0: quem oferecer uma versão modificada como serviço precisa abrir o código dela. Por
+isso a interface tem o link **Código-fonte** no topo (`CODIGO_FONTE` em `apps/web/src/main.tsx`).
+
 ## Licenças de terceiros que pesam
 
 - **bpmn-js** usa a licença bpmn.io: uso livre, mas o logo do bpmn.io tem de ficar visível no canvas.
