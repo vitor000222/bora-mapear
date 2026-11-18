@@ -78,7 +78,7 @@ export function Lista() {
                 <th>{t.tabela.nome}</th>
                 <th>{t.tabela.linguagem}</th>
                 <th className="num">{t.tabela.etapas}</th>
-                <th className="num">{t.tabela.versao}</th>
+                <th className="num col-versao">{t.tabela.versao}</th>
                 <th>{t.tabela.atualizado}</th>
                 <th aria-label={t.tabela.acoes} />
               </tr>
@@ -96,7 +96,7 @@ export function Lista() {
                     <span className={`selo selo-${m.linguagem}`}>{NOMES_LINGUAGEM[m.linguagem]}</span>
                   </td>
                   <td className="num">{m.etapas}</td>
-                  <td className="num">v{m.versaoAtual}</td>
+                  <td className="num col-versao">v{m.versaoAtual}</td>
                   <td className="suave">{formatarData(m.atualizadoEm)}</td>
                   <td className="acoes">
                     <button className="botao botao-fantasma botao-perigo" onClick={() => void apagar(m)}>

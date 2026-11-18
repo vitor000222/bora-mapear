@@ -58,6 +58,8 @@ export const pt = {
     carregando: 'Carregando…',
     atual: 'atual',
     voce: 'você',
+    // Autor de versão feita por agente: "agente Mapeador".
+    agente: (nome: string) => `agente ${nome}`,
     etapas: (n: number) => `${n} etapas`,
     restaurar: 'Restaurar esta versão',
     registro: 'Registro de correções',
@@ -143,6 +145,7 @@ export const en: typeof pt = {
     carregando: 'Loading…',
     atual: 'current',
     voce: 'you',
+    agente: (nome: string) => `${nome} agent`,
     etapas: (n: number) => `${n} ${n === 1 ? 'step' : 'steps'}`,
     restaurar: 'Restore this version',
     registro: 'Correction log',

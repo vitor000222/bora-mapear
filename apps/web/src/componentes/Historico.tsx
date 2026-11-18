@@ -12,9 +12,20 @@ interface Props {
   aoRestaurar: (m: Matriz, numero: number) => Promise<void>;
 }
 
+// O servidor grava o autor como "pessoa" ou "agente:<nome>" (ver apps/server/src/rotas-ia.ts).
+const TIPO_DO_AGENTE = { leitor: 'ler', mapeador: 'mapear', revisor: 'revisar', editor: 'editar', conversor: 'converter' } as const;
+
 export function Historico({ id, versaoAtual, atualizar, aoRestaurar }: Props) {
   const avisar = useAvisos();
-  const t = useTextos().mapeamento.historico;
+  const textos = useTextos();
+  const t = textos.mapeamento.historico;
+
+  const autorDe = (autor: string): string => {
+    if (autor === 'pessoa') return t.voce;
+    const nome = autor.match(/^agente:(\w+)$/)?.[1] as keyof typeof TIPO_DO_AGENTE | undefined;
+    const tipo = nome && TIPO_DO_AGENTE[nome];
+    return tipo ? t.agente(textos.ia.agentes[tipo]) : autor;
+  };
   const [versoes, setVersoes] = useState<CabecalhoVersao[] | null>(null);
   const [registro, setRegistro] = useState<RegistroCorrecao[] | null>(null);
 
@@ -46,7 +57,7 @@ export function Historico({ id, versaoAtual, atualizar, aoRestaurar }: Props) {
                 <strong>v{v.numero}</strong>
                 {v.numero === versaoAtual && <span className="selo selo-ok">{t.atual}</span>}
                 <span className="suave pequeno">
-                  {formatarData(v.criadoEm)} · {v.autor === 'pessoa' ? t.voce : v.autor} · {t.etapas(v.etapas)}
+                  {formatarData(v.criadoEm)} · {autorDe(v.autor)} · {t.etapas(v.etapas)}
                 </span>
               </div>
               {v.mensagem && <p>{v.mensagem}</p>}

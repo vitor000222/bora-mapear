@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { gruposTipo, rotulosTipo, type TipoEtapa } from '@bora-mapear/core';
 import {
   apiIa,
@@ -64,6 +64,19 @@ export function Configuracoes() {
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  // As descrições dos agentes vêm do servidor no idioma do pedido. Ao trocar o idioma, busca de novo só elas,
+  // sem mexer no que a pessoa está editando nas linhas dos agentes.
+  const { idioma } = useIdioma();
+  const idiomaDasDescricoes = useRef(idioma);
+  useEffect(() => {
+    if (idiomaDasDescricoes.current === idioma) return;
+    idiomaDasDescricoes.current = idioma;
+    apiIa
+      .agentes()
+      .then((a) => setDescricoes(a.descricoes))
+      .catch((e: unknown) => avisar(mensagemDe(e), 'erro'));
+  }, [idioma, avisar]);
 
   const carregarModelos = async (provedorId: string) => {
     if (modelos[provedorId]) return;
