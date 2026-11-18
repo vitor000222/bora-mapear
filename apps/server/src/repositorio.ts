@@ -1,5 +1,5 @@
 import type { Correcoes, Linguagem, Matriz } from '@bora-mapear/core';
-import type { Esforco, Evidencia, TipoProvedor } from '@bora-mapear/agentes';
+import type { Esforco, Evidencia, NomeAgente, TipoProvedor } from '@bora-mapear/agentes';
 
 /** Provedor como a interface vê: nunca com a chave. */
 export interface Provedor {
@@ -18,7 +18,7 @@ export interface ProvedorComChave extends Provedor {
 }
 
 /** "padrao" vale para todo agente sem configuração própria. */
-export type AgenteConfiguravel = 'padrao' | 'leitor' | 'mapeador' | 'revisor' | 'editor';
+export type AgenteConfiguravel = 'padrao' | NomeAgente;
 
 export interface ConfigAgente {
   agente: AgenteConfiguravel;
@@ -43,7 +43,7 @@ export interface EvidenciaSalva extends Evidencia {
 }
 
 export type StatusExecucao = 'rodando' | 'concluida' | 'falhou';
-export type TipoExecucao = 'ler' | 'mapear' | 'revisar' | 'editar';
+export type TipoExecucao = 'ler' | 'mapear' | 'revisar' | 'editar' | 'converter';
 
 export interface Execucao {
   id: string;
@@ -135,6 +135,12 @@ export interface Repositorio {
 
   registrarCorrecao(id: string, linguagem: Linguagem, versao: number, frases: string[]): Promise<RegistroCorrecao>;
   listarRegistro(id: string): Promise<RegistroCorrecao[]>;
+  /** As frases de correção de todos os mapeamentos, mais recentes primeiro: o histórico do gosto da pessoa. */
+  listarRegistroGeral(limite: number): Promise<RegistroCorrecao[]>;
+
+  /** Configurações da instalação (ex.: o estilo visual), guardadas como JSON. */
+  obterConfiguracao<T>(chave: string): Promise<T | undefined>;
+  salvarConfiguracao(chave: string, valor: unknown): Promise<void>;
 
   listarProvedores(): Promise<Provedor[]>;
   obterProvedorComChave(id: string): Promise<ProvedorComChave | undefined>;

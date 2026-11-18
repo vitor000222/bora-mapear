@@ -2,12 +2,14 @@ import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'rea
 import { LINGUAGENS, type Linguagem } from '@bora-mapear/core';
 import { api, DESCRICOES_LINGUAGEM, ErroApi, formatarData, NOMES_LINGUAGEM, type ResumoMapeamento } from '../api.ts';
 import { useAvisos } from '../avisos.tsx';
+import { Importar } from '../componentes/Importar.tsx';
 
 export function Lista() {
   const avisar = useAvisos();
   const [itens, setItens] = useState<ResumoMapeamento[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const dialogo = useRef<HTMLDialogElement>(null);
+  const dialogoImportar = useRef<HTMLDialogElement>(null);
 
   const carregar = () =>
     api
@@ -37,9 +39,14 @@ export function Lista() {
           <h1>Mapeamentos</h1>
           <p className="suave">Cada mapeamento guarda a matriz do processo, as versões e as correções de cada desenho.</p>
         </div>
-        <button className="botao botao-primario" onClick={() => dialogo.current?.showModal()}>
-          Novo mapeamento
-        </button>
+        <div className="barra-visao-acoes">
+          <button className="botao" onClick={() => dialogoImportar.current?.showModal()}>
+            Importar
+          </button>
+          <button className="botao botao-primario" onClick={() => dialogo.current?.showModal()}>
+            Novo mapeamento
+          </button>
+        </div>
       </div>
 
       {erro && (
@@ -102,6 +109,7 @@ export function Lista() {
       )}
 
       <NovoMapeamento dialogo={dialogo} />
+      <Importar dialogo={dialogoImportar} />
     </section>
   );
 }

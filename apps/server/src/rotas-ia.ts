@@ -2,6 +2,8 @@ import type { Hono } from 'hono';
 import { z } from 'zod';
 import {
   AGENTES,
+  aprenderEstilo,
+  converter,
   criarCliente,
   DESCRICOES_AGENTE,
   editar,
@@ -14,9 +16,24 @@ import {
   revisar,
   type ClienteModelo,
   type ConfigProvedor,
+  type ExemploCor,
   type NomeAgente,
 } from '@bora-mapear/agentes';
-import { lerMatriz, validarMatriz, type Matriz } from '@bora-mapear/core';
+import {
+  detectarFormato,
+  ErroImportacao,
+  EstiloVisualSchema,
+  estiloVazio,
+  importarBpmn,
+  importarMermaid,
+  lerMatriz,
+  paraId,
+  validarMatriz,
+  type EstiloVisual,
+  type Matriz,
+  type ResultadoImportacao,
+} from '@bora-mapear/core';
+import { matrizInicial } from './modelos.ts';
 import { corpo, ErroHttp } from './http.ts';
 import type { AgenteConfiguravel, Repositorio } from './repositorio.ts';
 import { Cofre, finalDaChave } from './segredo.ts';
@@ -329,11 +346,130 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
     return c.json(e);
   });
 
-  /** Grava a proposta do Mapeador ou do Editor como versão nova da matriz, com o agente como autor. */
+  // ---------------------------------------------------------------- importar e converter
+
+  const LIMITE_CONTEUDO = 2_000_000;
+
+  /** BPMN ou Mermaid de outra ferramenta vira um mapeamento novo, sem IA. */
+  app.post('/api/mapeamentos/importar', async (c) => {
+    const d = await corpo(
+      c,
+      z.object({
+        nome: z.string().trim().min(1, 'Dê um nome ao mapeamento.').max(200),
+        conteudo: z.string().min(1, 'O conteúdo está vazio.').max(LIMITE_CONTEUDO),
+        formato: z.enum(['bpmn', 'mermaid', 'auto']).default('auto'),
+      }),
+    );
+    const formato = d.formato === 'auto' ? detectarFormato(d.conteudo) : d.formato;
+    if (!formato) {
+      throw new ErroHttp(422, 'Não reconheci o formato: o importador lê BPMN 2.0 (XML) e fluxograma Mermaid. Para outro formato, use a conversão com IA.', {
+        podeUsarIa: true,
+      });
+    }
+    let r: ResultadoImportacao;
+    try {
+      r = formato === 'bpmn' ? await importarBpmn(d.conteudo) : importarMermaid(d.conteudo, d.nome);
+    } catch (erro) {
+      if (erro instanceof ErroImportacao) throw new ErroHttp(422, erro.message, { podeUsarIa: true });
+      throw erro;
+    }
+    const matriz: Matriz = { ...r.matriz, processo: { ...r.matriz.processo, nome: d.nome, id: paraId(d.nome, 'processo') } };
+    const mapeamento = await repo.criarMapeamento(
+      { nome: d.nome, descricao: '', linguagem: formato },
+      matriz,
+      'pessoa',
+      `Importado de ${formato === 'bpmn' ? 'BPMN' : 'Mermaid'}.`,
+    );
+    if (r.correcoes) await repo.salvarCorrecoes(mapeamento.id, 'bpmn', r.correcoes);
+    return c.json({ mapeamento, avisos: r.avisos, validacao: validarMatriz(matriz) }, 201);
+  });
+
+  const iniciarConversao = async (mapeamentoId: string, conteudo: string, cliente: ClienteModelo) => {
+    const m = (await repo.obterMapeamento(mapeamentoId))!;
+    const versao = (await repo.versaoAtual(mapeamentoId))!;
+    return executor.iniciar(mapeamentoId, 'converter', { caracteres: conteudo.length }, async (ctx) => {
+      const r = await converter(cliente, { conteudo, nomeProcesso: m.nome, idProcesso: versao.matriz.processo.id }, ctx.progresso);
+      ctx.uso(r.uso);
+      return { matriz: r.matriz, validacao: r.validacao, rodadas: r.rodadas, avisos: r.avisos, versaoBase: versao.numero };
+    });
+  };
+
+  /** Qualquer outro formato (PlantUML, lista de passos, tabela): o Conversor escreve a matriz num mapeamento novo. */
+  app.post('/api/mapeamentos/importar-com-ia', async (c) => {
+    const d = await corpo(c, z.object({ nome: z.string().trim().min(1).max(200), conteudo: z.string().min(1).max(LIMITE_CONTEUDO) }));
+    const cliente = await clienteDoAgente('conversor');
+    const mapeamento = await repo.criarMapeamento({ nome: d.nome, descricao: '', linguagem: 'bpmn' }, matrizInicial('em-branco', d.nome), 'pessoa', 'Criado para a conversão com IA.');
+    const execucao = await iniciarConversao(mapeamento.id, d.conteudo, cliente);
+    return c.json({ mapeamento, execucao }, 202);
+  });
+
+  app.post('/api/mapeamentos/:id/ia/converter', async (c) => {
+    const id = c.req.param('id');
+    await exigirMapeamento(id);
+    const { conteudo } = await corpo(c, z.object({ conteudo: z.string().min(1).max(LIMITE_CONTEUDO) }));
+    return c.json(await iniciarConversao(id, conteudo, await clienteDoAgente('conversor')), 202);
+  });
+
+  // ---------------------------------------------------------------- estilo visual
+
+  const CHAVE_ESTILO = 'estilo_visual';
+  const estiloAtual = async () => (await repo.obterConfiguracao<EstiloVisual>(CHAVE_ESTILO)) ?? estiloVazio();
+
+  app.get('/api/estilo', async (c) => c.json(await estiloAtual()));
+
+  app.put('/api/estilo', async (c) => {
+    const estilo = await corpo(c, EstiloVisualSchema);
+    await repo.salvarConfiguracao(CHAVE_ESTILO, estilo);
+    return c.json(estilo);
+  });
+
+  /** As cores que a pessoa aplicou à mão, em todos os mapeamentos, com o contexto de cada etapa. */
+  const exemplosDeCor = async (): Promise<ExemploCor[]> => {
+    const exemplos: ExemploCor[] = [];
+    for (const m of await repo.listarMapeamentos()) {
+      const versao = await repo.versaoAtual(m.id);
+      if (!versao) continue;
+      const raias = new Map(versao.matriz.raias.map((r) => [r.id, r.nome]));
+      for (const visao of await repo.listarVisoes(m.id)) {
+        for (const [chave, n] of Object.entries(visao.correcoes.nos)) {
+          if (!n.corFundo && !n.corBorda) continue;
+          const e = versao.matriz.etapas.find((x) => x.chave === chave);
+          if (!e) continue;
+          exemplos.push({
+            tipo: e.tipo,
+            raia: raias.get(e.raia) ?? e.raia,
+            nome: e.nome,
+            ...(e.revisarHumano ? { revisarHumano: true } : {}),
+            ...(!e.evidencias?.length ? { semEvidencia: true } : {}),
+            ...(n.corFundo ? { corFundo: n.corFundo } : {}),
+            ...(n.corBorda ? { corBorda: n.corBorda } : {}),
+          });
+        }
+      }
+    }
+    return exemplos.slice(0, 300);
+  };
+
+  /** O agente Visual propõe um estilo; nada é salvo até a pessoa aceitar (PUT /api/estilo). */
+  app.post('/api/estilo/aprender', async (c) => {
+    const cliente = await clienteDoAgente('visual');
+    const exemplos = await exemplosDeCor();
+    const frases = (await repo.listarRegistroGeral(40)).flatMap((r) => r.frases).slice(0, 100);
+    try {
+      const r = await aprenderEstilo(cliente, { exemplos, frases, estiloAtual: await estiloAtual() });
+      return c.json({ ...r, exemplos: exemplos.length });
+    } catch (erro) {
+      return traduzirErro(erro);
+    }
+  });
+
+  /** Grava a proposta do Mapeador, do Editor ou do Conversor como versão nova da matriz, com o agente como autor. */
   app.post('/api/execucoes/:id/aplicar', async (c) => {
     const exec = await repo.obterExecucao(c.req.param('id'));
     if (!exec) throw new ErroHttp(404, 'Execução não encontrada.');
-    if (exec.tipo !== 'mapear' && exec.tipo !== 'editar') throw new ErroHttp(400, 'Só as propostas do Mapeador e do Editor viram versão.');
+    if (exec.tipo !== 'mapear' && exec.tipo !== 'editar' && exec.tipo !== 'converter') {
+      throw new ErroHttp(400, 'Só as propostas do Mapeador, do Editor e do Conversor viram versão.');
+    }
     if (exec.status !== 'concluida') throw new ErroHttp(409, 'A execução ainda não terminou, ou falhou.');
     if (exec.aplicadaNaVersao !== null) throw new ErroHttp(409, `Esta proposta já virou a versão ${exec.aplicadaNaVersao}.`);
     const { forcar, mensagem } = await corpo(c, z.object({ forcar: z.boolean().default(false), mensagem: z.string().max(500).optional() }));
@@ -356,8 +492,11 @@ export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
       mensagem?.trim() ||
       (exec.tipo === 'mapear'
         ? `Mapeada pelo agente a partir de ${saida.evidencias ?? 0} evidências.`
-        : `${saida.resumo ?? 'Edição do agente.'} (pedido: "${(exec.entrada as { pedido: string }).pedido}")`);
-    const versao = await repo.salvarVersao(exec.mapeamentoId, matriz, exec.tipo === 'mapear' ? 'agente:mapeador' : 'agente:editor', texto);
+        : exec.tipo === 'converter'
+          ? 'Convertida pelo agente a partir de código ou texto.'
+          : `${saida.resumo ?? 'Edição do agente.'} (pedido: "${(exec.entrada as { pedido: string }).pedido}")`);
+    const autor = exec.tipo === 'mapear' ? 'agente:mapeador' : exec.tipo === 'converter' ? 'agente:conversor' : 'agente:editor';
+    const versao = await repo.salvarVersao(exec.mapeamentoId, matriz, autor, texto);
     await repo.atualizarExecucao(exec.id, { aplicadaNaVersao: versao.numero });
     const { matriz: _m, ...cabecalho } = versao;
     return c.json({ versao: cabecalho, validacao: validarMatriz(matriz) }, 201);

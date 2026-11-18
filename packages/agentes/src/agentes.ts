@@ -6,8 +6,13 @@ import {
   formatarValidacao,
   ListaOperacoesSchema,
   MatrizSchema,
+  RegraVisualSchema,
+  regraVale,
   validarMatriz,
+  type Etapa,
+  type EstiloVisual,
   type Matriz,
+  type TipoEtapa,
   type Operacao,
   type Problema,
   type ResultadoValidacao,
@@ -123,27 +128,32 @@ function conferirEvidencias(m: Matriz, evidencias: Evidencia[]): { matriz: Matri
   return { matriz: { ...m, etapas }, avisos };
 }
 
-/**
- * Escreve a matriz a partir das evidências e passa pelo portão. Reprovou, devolve os erros
- * ao modelo e pede a matriz corrigida, até três rodadas.
- */
-export async function mapear(cliente: ClienteModelo, entrada: EntradaMapeador, aoProgredir: AoProgredir = nada): Promise<ResultadoMapeador> {
-  if (!entrada.evidencias.length) throw new ErroAgente('Não há evidências para mapear. Envie fontes e rode o Leitor antes.');
-  const pedido =
-    `Processo: ${entrada.nomeProcesso} (id "${entrada.idProcesso}")\n` +
-    (entrada.instrucoes?.trim() ? `Instruções de quem pediu: ${entrada.instrucoes.trim()}\n` : '') +
-    `\nEvidências:\n${formatarEvidencias(entrada.evidencias)}\n\nEscreva a matriz completa do processo.`;
+interface PedidoMatriz {
+  sistema: string;
+  usuario: string;
+  idProcesso: string;
+  nomeProcesso: string;
+  /** Mensagem da primeira rodada, para o progresso. */
+  rotulo: string;
+  /** Conferências próprias do agente, depois de cada rodada. */
+  ajustar?: (m: Matriz) => { matriz: Matriz; avisos: string[] };
+}
 
+/**
+ * Pede a matriz ao modelo e passa pelo portão. Reprovou, devolve os erros e pede a matriz
+ * corrigida, até três rodadas. Usado pelo Mapeador e pelo Conversor.
+ */
+async function escreverMatriz(cliente: ClienteModelo, p: PedidoMatriz, aoProgredir: AoProgredir): Promise<ResultadoMapeador> {
   let uso = USO_ZERO;
   let historico: Mensagem[] = [];
-  let usuario = pedido;
+  let usuario = p.usuario;
   const rodadasMax = 3;
   for (let rodada = 1; ; rodada++) {
-    aoProgredir(rodada === 1 ? `Mapeando a partir de ${entrada.evidencias.length} evidências…` : `Rodada ${rodada}: corrigindo o que o portão apontou…`);
-    const r = await gerarJson(cliente, { sistema: SISTEMA_MAPEADOR, usuario, historico, schema: MatrizSchema, nomeSchema: 'matriz', maxTokens: 32000 });
+    aoProgredir(rodada === 1 ? p.rotulo : `Rodada ${rodada}: corrigindo o que o portão apontou…`);
+    const r = await gerarJson(cliente, { sistema: p.sistema, usuario, historico, schema: MatrizSchema, nomeSchema: 'matriz', maxTokens: 32000 });
     uso = somarUso(uso, r.uso);
-    const matrizBruta: Matriz = { ...r.dado, processo: { ...r.dado.processo, id: entrada.idProcesso, nome: entrada.nomeProcesso } };
-    const { matriz, avisos } = conferirEvidencias(matrizBruta, entrada.evidencias);
+    const matrizBruta: Matriz = { ...r.dado, processo: { ...r.dado.processo, id: p.idProcesso, nome: p.nomeProcesso } };
+    const { matriz, avisos } = p.ajustar ? p.ajustar(matrizBruta) : { matriz: matrizBruta, avisos: [] as string[] };
     const validacao = validarMatriz(matriz);
     const erros = validacao.problemas.filter((p) => p.severidade === 'erro').length;
     aoProgredir(validacao.ok ? `Portão: aprovada (${matriz.etapas.length} etapas, ${matriz.raias.length} raias).` : `Portão: ${erros} ${erros === 1 ? 'erro' : 'erros'}.`);
@@ -154,6 +164,139 @@ export async function mapear(cliente: ClienteModelo, entrada: EntradaMapeador, a
     historico = r.mensagens;
     usuario = `O portão reprovou a matriz:\n${formatarValidacao(validacao)}\n\nCorrija esses pontos e devolva a matriz COMPLETA de novo.`;
   }
+}
+
+/** Escreve a matriz a partir das evidências; toda linha aponta a evidência que a sustenta. */
+export async function mapear(cliente: ClienteModelo, entrada: EntradaMapeador, aoProgredir: AoProgredir = nada): Promise<ResultadoMapeador> {
+  if (!entrada.evidencias.length) throw new ErroAgente('Não há evidências para mapear. Envie fontes e rode o Leitor antes.');
+  return escreverMatriz(
+    cliente,
+    {
+      sistema: SISTEMA_MAPEADOR,
+      usuario:
+        `Processo: ${entrada.nomeProcesso} (id "${entrada.idProcesso}")\n` +
+        (entrada.instrucoes?.trim() ? `Instruções de quem pediu: ${entrada.instrucoes.trim()}\n` : '') +
+        `\nEvidências:\n${formatarEvidencias(entrada.evidencias)}\n\nEscreva a matriz completa do processo.`,
+      idProcesso: entrada.idProcesso,
+      nomeProcesso: entrada.nomeProcesso,
+      rotulo: `Mapeando a partir de ${entrada.evidencias.length} evidências…`,
+      ajustar: (m) => conferirEvidencias(m, entrada.evidencias),
+    },
+    aoProgredir,
+  );
+}
+
+// ---------------------------------------------------------------- Conversor
+
+const SISTEMA_CONVERSOR = `Você é o Conversor do Bora Mapear, uma ferramenta de mapeamento de processos.
+Você recebe um processo descrito em outra forma (código Mermaid, PlantUML, BPMN, uma lista de passos, uma tabela, texto corrido) e devolve a MATRIZ do processo: uma linha por elemento.
+
+Como converter:
+- Preserve os nomes, a ordem e as decisões do original. Raia, swimlane, pool, subgraph ou "quem faz" vira raia.
+- Rótulo de seta vira "rotulo". Se o original tem ids, use-os como chave quando forem válidos (começam com letra).
+- Não invente etapa. Se faltar início ou fim para o fluxo fechar, crie com "revisarHumano": true.
+- Ignore estilo, cor e posição: o desenho sai da matriz.
+
+${REGRAS_DE_MODELAGEM}`;
+
+export interface EntradaConversor {
+  conteudo: string;
+  nomeProcesso: string;
+  idProcesso: string;
+}
+
+/** Converte código ou texto de outra ferramenta em matriz, passando pelo portão. */
+export async function converter(cliente: ClienteModelo, entrada: EntradaConversor, aoProgredir: AoProgredir = nada): Promise<ResultadoMapeador> {
+  if (!entrada.conteudo.trim()) throw new ErroAgente('Não há conteúdo para converter.');
+  return escreverMatriz(
+    cliente,
+    {
+      sistema: SISTEMA_CONVERSOR,
+      usuario: `Processo: ${entrada.nomeProcesso} (id "${entrada.idProcesso}")\n\nConteúdo a converter:\n<<<\n${entrada.conteudo}\n>>>\n\nEscreva a matriz completa.`,
+      idProcesso: entrada.idProcesso,
+      nomeProcesso: entrada.nomeProcesso,
+      rotulo: 'Convertendo para a matriz…',
+    },
+    aoProgredir,
+  );
+}
+
+// ---------------------------------------------------------------- Visual
+
+const SISTEMA_VISUAL = `Você é o agente Visual do Bora Mapear, uma ferramenta de mapeamento de processos.
+Você recebe exemplos de cores que a pessoa aplicou à mão em etapas dos mapeamentos dela (com o tipo, a raia e o nome de cada etapa) e frases do registro das correções que ela fez no desenho.
+Escreva o ESTILO dela como uma lista curta de regras, do tipo "tarefas manuais em laranja". O programa aplica as regras; você não escreve coordenada nem posição.
+
+Como escrever:
+1. Só regra que vários exemplos sustentam (pelo menos dois), e que explica um padrão, não um caso isolado.
+2. Condições simples: tipo ou família primeiro; raia só quando a cor depende da área; "nomeContem" só quando uma palavra explica a cor.
+3. Use exatamente as cores dos exemplos (#rrggbb).
+4. Ordem: das regras gerais para as específicas. Quando duas valem para a mesma etapa, a de baixo vence.
+5. Em "observacoes", anote padrões que não são de cor (ex.: "você costuma descer as decisões"), para a pessoa saber. Eles não viram regra.
+Se não houver padrão, devolva a lista de regras vazia e diga por quê nas observações.`;
+
+export interface ExemploCor {
+  tipo: TipoEtapa;
+  raia: string;
+  nome: string;
+  revisarHumano?: boolean;
+  semEvidencia?: boolean;
+  corFundo?: string;
+  corBorda?: string;
+}
+
+const RespostaVisualSchema = z.object({
+  regras: z.array(RegraVisualSchema),
+  observacoes: z.array(z.string()),
+});
+
+export interface ResultadoVisual {
+  estilo: EstiloVisual;
+  observacoes: string[];
+  /** Para cada regra: em quantos exemplos ela vale e em quantos acerta a cor. */
+  cobertura: Array<{ vale: number; acerta: number }>;
+  uso: Uso;
+}
+
+function etapaDoExemplo(ex: ExemploCor): { etapa: Etapa; matriz: Matriz } {
+  const etapa: Etapa = { chave: 'X', tipo: ex.tipo, nome: ex.nome, raia: 'r', proximos: [], ...(ex.revisarHumano ? { revisarHumano: true } : {}), ...(ex.semEvidencia ? {} : { evidencias: ['EV'] }) };
+  return { etapa, matriz: { versaoSchema: 1, processo: { id: 'p', nome: 'p' }, raias: [{ id: 'r', nome: ex.raia }], etapas: [etapa] } };
+}
+
+/** Aprende o estilo visual da pessoa a partir das cores que ela já aplicou. */
+export async function aprenderEstilo(
+  cliente: ClienteModelo,
+  entrada: { exemplos: ExemploCor[]; frases: string[]; estiloAtual?: EstiloVisual },
+  aoProgredir: AoProgredir = nada,
+): Promise<ResultadoVisual> {
+  if (entrada.exemplos.length < 2) {
+    throw new ErroAgente('Ainda não há cores suficientes nas suas correções para aprender um estilo. Pinte algumas etapas no desenho e salve as correções.');
+  }
+  aoProgredir(`Analisando ${entrada.exemplos.length} etapas pintadas e ${entrada.frases.length} correções…`);
+  const r = await gerarJson(cliente, {
+    sistema: SISTEMA_VISUAL,
+    usuario:
+      `Exemplos (uma etapa por linha):\n${entrada.exemplos.map((e) => JSON.stringify(e)).join('\n')}\n\n` +
+      `Registro de correções (mais recentes primeiro):\n${entrada.frases.map((f) => `- ${f}`).join('\n') || '(vazio)'}\n\n` +
+      (entrada.estiloAtual?.regras.length ? `Estilo atual, para melhorar:\n${JSON.stringify(entrada.estiloAtual.regras)}\n\n` : '') +
+      'Escreva as regras do estilo.',
+    schema: RespostaVisualSchema,
+    nomeSchema: 'estilo',
+  });
+  const estilo: EstiloVisual = { versao: 1, regras: r.dado.regras };
+  const cobertura = estilo.regras.map((regra) => {
+    let vale = 0;
+    let acerta = 0;
+    for (const ex of entrada.exemplos) {
+      const { etapa, matriz } = etapaDoExemplo(ex);
+      if (!regraVale(regra, etapa, matriz)) continue;
+      vale++;
+      if ((!regra.corFundo || regra.corFundo.toLowerCase() === ex.corFundo?.toLowerCase()) && (!regra.corBorda || regra.corBorda.toLowerCase() === ex.corBorda?.toLowerCase())) acerta++;
+    }
+    return { vale, acerta };
+  });
+  aoProgredir(`${estilo.regras.length} ${estilo.regras.length === 1 ? 'regra' : 'regras'} de estilo.`);
+  return { estilo, observacoes: r.dado.observacoes, cobertura, uso: r.uso };
 }
 
 // ---------------------------------------------------------------- Revisor

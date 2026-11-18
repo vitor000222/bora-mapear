@@ -53,9 +53,10 @@ mesma matriz. A IA escreve linhas da matriz. Nenhum modelo escreve XML, código 
 | move, redimensiona, recolore, redesenha uma seta | **Correção** da visão | Não |
 | renomeia, cria ou apaga etapa, troca raia, religa seta | **Nova versão** da matriz | Sim |
 
-Na grade da matriz, editar conteúdo é direto. No editor visual, o importador lê o desenho, compara com a
-matriz e **propõe** as mudanças para o usuário aceitar (fase 3). Até lá, o núcleo já devolve, na extração
-das correções, a lista de elementos do desenho que não existem na matriz.
+Na grade da matriz, editar conteúdo é direto. No editor visual, o importador (`importarBpmn`) lê o desenho,
+`compararMatrizes` diz o que mudou em frases, e o usuário escolhe: salvar como versão nova, revisar na Matriz
+ou guardar só a forma. O que o BPMN não guarda (confiança, revisão humana) e a ordem das linhas vêm da matriz
+original (`reconciliarComOriginal`). No Mermaid, "Trazer para a matriz" faz o mesmo com `importarMermaid`.
 
 ## Trocar de linguagem
 
@@ -76,8 +77,8 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
 | **Mapeador** | evidências | linhas da matriz, cada uma apontando a evidência | escreve XML ou Mermaid; inventa etapa sem evidência |
 | **Revisor** | matriz + evidências | lacunas e linhas para revisão humana | altera a matriz |
 | **Editor** | pedido em linguagem natural + matriz | um *patch*: operações sobre linhas | reescreve a matriz inteira |
-| **Visual** | layout gerado + histórico de correções do usuário | correções propostas (ordem de raias, posição, cor) | muda conteúdo |
-| **Conversor** | código de outra linguagem | matriz | — |
+| **Visual** | cores aplicadas em todos os mapeamentos + registro de correções | regras de estilo ("tarefas manuais em laranja"), com quantos exemplos cada uma acerta | escreve coordenada; muda conteúdo |
+| **Conversor** | código ou texto de outra ferramenta (PlantUML, lista, tabela) | matriz, pelo mesmo laço do portão | inventa etapa |
 
 - **O portão não é agente.** É código (`validarMatriz`). Reprovou, os erros voltam ao Mapeador com o
   texto pronto para ele corrigir, até N tentativas. Depois disso, a matriz é entregue com as linhas

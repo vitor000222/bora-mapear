@@ -80,6 +80,12 @@ CREATE TABLE IF NOT EXISTS execucao (
 CREATE INDEX IF NOT EXISTS execucao_por_mapeamento ON execucao (mapeamento_id, criado_em);
 ALTER TABLE mapeamento ADD COLUMN proxima_evidencia INTEGER NOT NULL DEFAULT 1;
 `,
+  `
+CREATE TABLE IF NOT EXISTS configuracao (
+  chave TEXT PRIMARY KEY,
+  valor TEXT NOT NULL
+);
+`,
 ];
 
 const ESQUEMA = `
@@ -324,6 +330,28 @@ export class RepositorioSqlite implements Repositorio {
       frases: JSON.parse(texto(l['frases'])) as string[],
       criadoEm: texto(l['criado_em']),
     }));
+  }
+
+  async listarRegistroGeral(limite: number): Promise<RegistroCorrecao[]> {
+    const linhas = this.db.prepare('SELECT * FROM registro_correcao ORDER BY id DESC LIMIT ?').all(limite) as Linha[];
+    return linhas.map((l) => ({
+      id: Number(l['id']),
+      linguagem: texto(l['linguagem']) as Linguagem,
+      versao: Number(l['versao']),
+      frases: JSON.parse(texto(l['frases'])) as string[],
+      criadoEm: texto(l['criado_em']),
+    }));
+  }
+
+  async obterConfiguracao<T>(chave: string): Promise<T | undefined> {
+    const l = this.db.prepare('SELECT valor FROM configuracao WHERE chave = ?').get(chave) as Linha | undefined;
+    return l ? (JSON.parse(texto(l['valor'])) as T) : undefined;
+  }
+
+  async salvarConfiguracao(chave: string, valor: unknown): Promise<void> {
+    this.db
+      .prepare('INSERT INTO configuracao (chave, valor) VALUES (?, ?) ON CONFLICT (chave) DO UPDATE SET valor = excluded.valor')
+      .run(chave, JSON.stringify(valor));
   }
 
   // ---------------------------------------------------------------- provedores e agentes

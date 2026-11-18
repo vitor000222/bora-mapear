@@ -292,7 +292,16 @@ const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b
 /** O que mudou de uma gravação de correções para a seguinte. */
 export function diferencaCorrecoes(antes: Correcoes, depois: Correcoes): DiferencaCorrecoes {
   const mudou = correcoesVazias();
-  for (const [k, v] of Object.entries(depois.nos)) if (!igual(antes.nos[k], v)) mudou.nos[k] = v;
+  // Por campo: pintar uma etapa já movida não é "mover de novo".
+  for (const [k, v] of Object.entries(depois.nos)) {
+    const a = antes.nos[k] ?? {};
+    const parcial: CorrecaoNo = {};
+    if ((a.x !== v.x || a.y !== v.y) && v.x !== undefined && v.y !== undefined) Object.assign(parcial, { x: v.x, y: v.y });
+    if ((a.largura !== v.largura || a.altura !== v.altura) && v.largura !== undefined && v.altura !== undefined) Object.assign(parcial, { largura: v.largura, altura: v.altura });
+    if (v.corFundo && a.corFundo !== v.corFundo) parcial.corFundo = v.corFundo;
+    if (v.corBorda && a.corBorda !== v.corBorda) parcial.corBorda = v.corBorda;
+    if (Object.keys(parcial).length) mudou.nos[k] = parcial;
+  }
   for (const [k, v] of Object.entries(depois.arestas)) if (!igual(antes.arestas[k], v)) mudou.arestas[k] = v;
   for (const [k, v] of Object.entries(depois.raias)) if (!igual(antes.raias[k], v)) mudou.raias[k] = v;
   if (depois.pool && !igual(antes.pool, depois.pool)) mudou.pool = depois.pool;

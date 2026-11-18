@@ -22,6 +22,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
+  aplicarEstilo,
   caixaDoRotuloDaSeta,
   correcoesVazias,
   extrairCorrecoesDoReactFlow,
@@ -29,9 +30,11 @@ import {
   rotear,
   type Caixa,
   type Correcoes,
+  type EstiloVisual,
   type Matriz,
   type TipoEtapa,
 } from '@bora-mapear/core';
+import { useAvisos } from '../avisos.tsx';
 
 interface Dados extends Record<string, unknown> {
   rotulo: string;
@@ -150,11 +153,13 @@ const TIPOS_DE_ARESTA = { roteada: ArestaRoteada };
 interface Props {
   matriz: Matriz;
   correcoes: Correcoes;
+  estilo: EstiloVisual;
   aoSalvar: (correcoes: Correcoes) => Promise<void>;
 }
 
 /** O desenho no React Flow, nas mesmas coordenadas do BPMN. Arrastar e pintar vira correção. */
-export function VisaoReactFlow({ matriz, correcoes, aoSalvar }: Props) {
+export function VisaoReactFlow({ matriz, correcoes, estilo, aoSalvar }: Props) {
+  const avisar = useAvisos();
   const inicial = useMemo(() => renderizarReactFlow(matriz, { correcoes }), [matriz, correcoes]);
   const [nodes, setNodes, aoMudarNos] = useNodesState<No>(inicial.nodes as No[]);
   const [edges, setEdges, aoMudarArestas] = useEdgesState<Edge>(inicial.edges as Edge[]);
@@ -211,6 +216,17 @@ export function VisaoReactFlow({ matriz, correcoes, aoSalvar }: Props) {
         <span className="suave pequeno">Arraste as etapas; selecione (Shift para várias) e escolha uma cor.</span>
         <div className="barra-visao-acoes">
           {sujo && <span className="selo selo-aviso">Correções não salvas</span>}
+          <button
+            className="botao"
+            disabled={salvando}
+            title="Pinta as etapas com as regras do seu estilo (Configurações)"
+            onClick={() => {
+              if (!estilo.regras.length) avisar('Você ainda não tem estilo. Defina ou aprenda um em Configurações.', 'info');
+              else void aoSalvar(aplicarEstilo(matriz, estilo, correcoes));
+            }}
+          >
+            Aplicar meu estilo
+          </button>
           <button className="botao" onClick={() => void aoSalvar(correcoesVazias())} disabled={salvando || !temCorrecao} title="Apaga as correções desta visão">
             Voltar ao automático
           </button>

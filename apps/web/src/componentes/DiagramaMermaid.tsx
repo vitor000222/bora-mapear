@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import mermaid from 'mermaid';
-import { renderizarMermaid, type Matriz } from '@bora-mapear/core';
+import { coresDoEstilo, renderizarMermaid, type EstiloVisual, type Matriz } from '@bora-mapear/core';
 
 mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral', flowchart: { htmlLabels: true } });
 let contador = 0;
 
 /** Desenha o código Mermaid (o editado à mão, se houver; senão o gerado da matriz). */
-export function DiagramaMermaid({ matriz, codigo }: { matriz: Matriz; codigo: string | null }) {
-  const fonte = useMemo(() => codigo ?? renderizarMermaid(matriz), [matriz, codigo]);
+export function DiagramaMermaid({ matriz, codigo, estilo }: { matriz: Matriz; codigo: string | null; estilo?: EstiloVisual }) {
+  const fonte = useMemo(() => codigo ?? renderizarMermaid(matriz, estilo ? { cores: coresDoEstilo(matriz, estilo) } : {}), [matriz, codigo, estilo]);
   const alvo = useRef<HTMLDivElement>(null);
   const [erro, setErro] = useState<string | null>(null);
 

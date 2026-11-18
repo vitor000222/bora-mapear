@@ -143,3 +143,12 @@ test('a mudança entre duas gravações lista só o que mudou e o que voltou ao 
   ]);
   assert.deepEqual(descreverMudanca(m, depois, depois), []);
 });
+
+test('pintar uma etapa já movida registra só a cor', () => {
+  const m = exemplo();
+  const auto = calcularLayout(m);
+  const movida = { x: auto.nos['E04']!.x + 60, y: auto.nos['E04']!.y };
+  const antes: Correcoes = { versao: 1, nos: { E04: movida }, arestas: {}, raias: {} };
+  const depois: Correcoes = { versao: 1, nos: { E04: { ...movida, corFundo: '#e3f2fd' } }, arestas: {}, raias: {} };
+  assert.deepEqual(descreverMudanca(m, antes, depois), ['Pintou "Analisar crédito do cliente" (E04): fundo #e3f2fd.']);
+});

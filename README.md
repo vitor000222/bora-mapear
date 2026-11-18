@@ -4,7 +4,7 @@
 documento do processo; os agentes montam a matriz; o Bora Mapear desenha em BPMN, Mermaid ou React Flow.
 Você corrige o desenho, e a correção fica guardada.
 
-> Status: **fase 2 — agentes de IA prontos**. Próximo: aprender com as correções do usuário ([roadmap](docs/roadmap.md)).
+> Status: **fase 3 — o desenho e o código voltam para a matriz, e o estilo é aprendido**. Próximo: Postgres e exportações ([roadmap](docs/roadmap.md)).
 
 ## A ideia
 
@@ -89,6 +89,19 @@ na Matriz para revisar antes. Cada execução mostra o progresso, os tokens e o 
 **Sobre a chave:** fica cifrada (AES-256-GCM) no banco local, nunca volta para o navegador e nunca vai para log.
 A chave-mestra vem de `BORA_SECRET` ou de `data/segredo.key`, criado na primeira vez. As chamadas saem do
 servidor direto para o provedor.
+
+## Ida e volta
+
+- **Importar** (na lista): BPMN 2.0 de qualquer ferramenta (Camunda, bpmn.io, Bizagi) e fluxograma Mermaid entram
+  direto, sem IA. BPMN exportado pelo próprio Bora Mapear volta com as posições do desenho. Outro formato (PlantUML,
+  lista de passos, tabela) passa pelo agente **Conversor**.
+- **Do desenho para a matriz:** renomeou, criou ou apagou etapa no bpmn-js? Ao salvar, o app mostra o que mudou e
+  oferece salvar como versão nova, revisar na Matriz ou guardar só a forma.
+- **Do código para a matriz:** editou o Mermaid à mão? "Trazer para a matriz" lê o código e abre a matriz resultante
+  para revisar.
+- **Estilo visual:** em Configurações, regras de cor ("tarefas manuais em laranja"). O agente **Visual** aprende as
+  regras a partir das cores que você já aplicou nos desenhos; "Aplicar meu estilo" pinta qualquer desenho com elas.
+  O agente escreve regras, nunca coordenadas.
 
 **Sem chave, para testar:** `npm run llm-falso` sobe um provedor falso em `http://127.0.0.1:11435/v1`, que
 responde como cada agente sem chamar modelo nenhum. Cadastre-o como "Ollama (local)" com essa URL.

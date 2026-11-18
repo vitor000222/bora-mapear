@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validarMatriz } from '@bora-mapear/core';
 import {
+  aprenderEstilo,
   citacaoNaFonte,
+  converter,
   criarCliente,
   dividirTexto,
   editar,
@@ -196,4 +198,30 @@ test('Revisor: junta o relatório do modelo com as conferências automáticas', 
   const r = await revisar(criarCliente(OPENROUTER, { modelo: 'm' }, { fetch: fn }), { matriz: m, evidencias: EVIDENCIAS });
   assert.deepEqual(r.relatorio.revisar.map((x) => x.chave), ['E07'], 'descarta chave que não existe');
   assert.ok(r.automaticos.some((a) => /E10/.test(a)));
+});
+
+test('Conversor: mesmo laço do portão, com nome e id do mapeamento', async () => {
+  const quebrada = exemplo();
+  quebrada.etapas.find((e) => e.chave === 'E15')!.proximos = [{ para: 'E01' }];
+  const { fn, chamadas } = fetchFalso([() => respostaOpenAI(quebrada), () => respostaOpenAI(exemplo())]);
+  const r = await converter(criarCliente(OPENROUTER, { modelo: 'm' }, { fetch: fn }), { conteudo: '@startuml\n:Pedido;\n@enduml', nomeProcesso: 'Pedido', idProcesso: 'pedido' });
+  assert.equal(r.rodadas, 2);
+  assert.equal(r.validacao.ok, true);
+  assert.equal(r.matriz.processo.id, 'pedido');
+  assert.match((chamadas[0]!.corpo['messages'] as Array<{ content: string }>)[1]!.content, /@startuml/);
+});
+
+test('Visual: aprende regras dos exemplos e mede em quantos a regra acerta', async () => {
+  const exemplos = [
+    { tipo: 'tarefa_manual' as const, raia: 'Logística', nome: 'Separar', corFundo: '#fff3e0', corBorda: '#ef6c00' },
+    { tipo: 'tarefa_manual' as const, raia: 'Vendas', nome: 'Conferir', corFundo: '#fff3e0', corBorda: '#ef6c00' },
+    { tipo: 'tarefa_manual' as const, raia: 'Vendas', nome: 'Embalar', corFundo: '#e3f2fd' },
+  ];
+  const { fn } = fetchFalso([
+    () => respostaOpenAI({ regras: [{ descricao: 'Tarefas manuais em laranja', quando: { tipos: ['tarefa_manual'] }, corFundo: '#fff3e0', corBorda: '#ef6c00' }], observacoes: [] }),
+  ]);
+  const r = await aprenderEstilo(criarCliente(OPENROUTER, { modelo: 'm' }, { fetch: fn }), { exemplos, frases: [] });
+  assert.equal(r.estilo.regras.length, 1);
+  assert.deepEqual(r.cobertura, [{ vale: 3, acerta: 2 }]);
+  await assert.rejects(aprenderEstilo(criarCliente(OPENROUTER, { modelo: 'm' }, { fetch: fn }), { exemplos: [], frases: [] }), /Pinte algumas etapas/);
 });

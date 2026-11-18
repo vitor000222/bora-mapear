@@ -1,4 +1,4 @@
-import type { Correcoes, Linguagem, Matriz, ResultadoValidacao } from '@bora-mapear/core';
+import type { Correcoes, EstiloVisual, Linguagem, Matriz, RegraVisual, ResultadoValidacao } from '@bora-mapear/core';
 
 export interface Mapeamento {
   id: string;
@@ -47,10 +47,13 @@ export interface RegistroCorrecao {
 export class ErroApi extends Error {
   readonly status: number;
   readonly detalhes: string[];
-  constructor(status: number, mensagem: string, detalhes: string[] = []) {
+  /** Detalhes que não são lista de mensagens (ex.: { podeUsarIa: true }). */
+  readonly extra: Record<string, unknown>;
+  constructor(status: number, mensagem: string, detalhes: string[] = [], extra: Record<string, unknown> = {}) {
     super(mensagem);
     this.status = status;
     this.detalhes = detalhes;
+    this.extra = extra;
   }
 }
 
@@ -71,7 +74,8 @@ async function pedir<T>(metodo: string, caminho: string, corpo?: unknown): Promi
   if (!resposta.ok) {
     const erro = (dados ?? {}) as { erro?: string; detalhes?: unknown };
     const detalhes = Array.isArray(erro.detalhes) ? erro.detalhes.map(String) : [];
-    throw new ErroApi(resposta.status, erro.erro ?? `Erro ${resposta.status}`, detalhes);
+    const extra = erro.detalhes && typeof erro.detalhes === 'object' && !Array.isArray(erro.detalhes) ? (erro.detalhes as Record<string, unknown>) : {};
+    throw new ErroApi(resposta.status, erro.erro ?? `Erro ${resposta.status}`, detalhes, extra);
   }
   return dados as T;
 }
@@ -100,7 +104,7 @@ export const api = {
 
 export type TipoProvedor = 'openai' | 'anthropic';
 export type Esforco = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-export type AgenteConfiguravel = 'padrao' | 'leitor' | 'mapeador' | 'revisor' | 'editor';
+export type AgenteConfiguravel = 'padrao' | 'leitor' | 'mapeador' | 'revisor' | 'editor' | 'conversor' | 'visual';
 
 export interface Provedor {
   id: string;
@@ -141,7 +145,7 @@ export interface Evidencia {
   verificada: boolean;
 }
 
-export type TipoExecucao = 'ler' | 'mapear' | 'revisar' | 'editar';
+export type TipoExecucao = 'ler' | 'mapear' | 'revisar' | 'editar' | 'converter';
 
 export interface Execucao {
   id: string;
@@ -201,7 +205,21 @@ export const apiIa = {
   editar: (id: string, pedido: string) => pedir<Execucao>('POST', `/api/mapeamentos/${id}/ia/editar`, { pedido }),
   execucoes: (id: string) => pedir<Execucao[]>('GET', `/api/mapeamentos/${id}/execucoes`),
   aplicar: (execId: string, forcar = false) => pedir<{ versao: CabecalhoVersao }>('POST', `/api/execucoes/${execId}/aplicar`, { forcar }),
+  converter: (id: string, conteudo: string) => pedir<Execucao>('POST', `/api/mapeamentos/${id}/ia/converter`, { conteudo }),
+  importar: (nome: string, conteudo: string) =>
+    pedir<{ mapeamento: Mapeamento; avisos: string[]; validacao: ResultadoValidacao }>('POST', '/api/mapeamentos/importar', { nome, conteudo }),
+  importarComIa: (nome: string, conteudo: string) => pedir<{ mapeamento: Mapeamento; execucao: Execucao }>('POST', '/api/mapeamentos/importar-com-ia', { nome, conteudo }),
+  estilo: () => pedir<EstiloVisual>('GET', '/api/estilo'),
+  salvarEstilo: (e: EstiloVisual) => pedir<EstiloVisual>('PUT', '/api/estilo', e),
+  aprenderEstilo: () =>
+    pedir<{ estilo: EstiloVisual; observacoes: string[]; cobertura: Array<{ vale: number; acerta: number }>; exemplos: number; uso: { custo?: number } }>(
+      'POST',
+      '/api/estilo/aprender',
+      {},
+    ),
 };
+
+export type { EstiloVisual, RegraVisual };
 
 export function formatarCusto(custo: number | null | undefined): string {
   if (custo === null || custo === undefined) return '';

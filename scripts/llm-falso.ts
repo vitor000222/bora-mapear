@@ -84,6 +84,38 @@ function editor(usuario: string) {
   };
 }
 
+function conversor(usuario: string) {
+  const conteudo = /<<<\n([\s\S]*?)\n>>>/.exec(usuario)?.[1] ?? '';
+  const passos = conteudo
+    .split('\n')
+    .map((l) => l.replace(/^\s*(\d+[.)]|[-*•])\s*/, '').trim())
+    .filter((l) => l && !/^@|^(flowchart|graph)\b/i.test(l))
+    .slice(0, 12);
+  const etapas: Array<Record<string, unknown>> = [{ chave: 'E01', tipo: 'inicio', nome: 'Início', raia: 'geral', proximos: [{ para: 'E02' }] }];
+  passos.forEach((p, i) => {
+    etapas.push({ chave: `E${String(i + 2).padStart(2, '0')}`, tipo: 'tarefa', nome: nomeDaTarefa(p), raia: 'geral', proximos: [{ para: `E${String(i + 3).padStart(2, '0')}` }] });
+  });
+  etapas.push({ chave: `E${String(passos.length + 2).padStart(2, '0')}`, tipo: 'fim', nome: 'Fim', raia: 'geral', proximos: [] });
+  return { versaoSchema: 1, processo: { id: 'processo', nome: 'Processo' }, raias: [{ id: 'geral', nome: 'Geral' }], etapas };
+}
+
+function visual(usuario: string) {
+  const exemplos = [...usuario.matchAll(/^(\{.*\})$/gm)].map((m) => JSON.parse(m[1]!) as { tipo: string; corFundo?: string; corBorda?: string });
+  const porTipo = new Map<string, Map<string, number>>();
+  for (const e of exemplos) {
+    if (!e.corFundo) continue;
+    const cores = porTipo.get(e.tipo) ?? new Map<string, number>();
+    const chave = `${e.corFundo}|${e.corBorda ?? ''}`;
+    cores.set(chave, (cores.get(chave) ?? 0) + 1);
+    porTipo.set(e.tipo, cores);
+  }
+  const regras = [...porTipo].map(([tipo, cores]) => {
+    const [fundo, borda] = [...cores].sort((a, b) => b[1] - a[1])[0]![0].split('|');
+    return { descricao: `Etapas do tipo ${tipo.replace(/_/g, ' ')} em ${fundo}`, quando: { tipos: [tipo] }, corFundo: fundo, ...(borda ? { corBorda: borda } : {}) };
+  });
+  return { regras, observacoes: ['Estilo de demonstração, tirado pelo provedor falso: uma regra por tipo pintado.'] };
+}
+
 function revisor() {
   return {
     resumo: 'Mapeamento de demonstração, feito pelo provedor falso. O fluxo fecha, mas falta saber o que acontece quando algo dá errado.',
@@ -103,6 +135,8 @@ createServer(async (req, res) => {
   else if (sistema.startsWith('Você é o Mapeador')) resposta = mapeador(corpo.messages);
   else if (sistema.startsWith('Você é o Editor')) resposta = editor(corpo.messages.find((m) => m.role === 'user')?.content ?? '');
   else if (sistema.startsWith('Você é o Revisor')) resposta = revisor();
+  else if (sistema.startsWith('Você é o Conversor')) resposta = conversor(usuario);
+  else if (sistema.startsWith('Você é o agente Visual')) resposta = visual(usuario);
   else resposta = { ok: true };
   await new Promise((ok) => setTimeout(ok, 600));
   json(res, 200, {

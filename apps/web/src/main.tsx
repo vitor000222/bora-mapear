@@ -18,7 +18,9 @@ function useHash(): string {
 
 function App() {
   const hash = useHash();
-  const id = hash.match(/^#\/m\/([\w-]+)/)?.[1];
+  const rota = hash.match(/^#\/m\/([\w-]+)(?:\/(\w+))?/);
+  const id = rota?.[1];
+  const aba = rota?.[2];
   return (
     <>
       <header className="topo">
@@ -36,7 +38,7 @@ function App() {
           </a>
         </nav>
       </header>
-      <main className="conteudo">{id ? <PaginaMapeamento key={id} id={id} /> : hash === '#/config' ? <Configuracoes /> : <Lista />}</main>
+      <main className="conteudo">{id ? <PaginaMapeamento key={id} id={id} {...(aba ? { abaInicial: aba } : {})} /> : hash === '#/config' ? <Configuracoes /> : <Lista />}</main>
     </>
   );
 }

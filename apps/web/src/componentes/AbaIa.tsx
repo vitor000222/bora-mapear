@@ -21,6 +21,7 @@ const NOMES_EXECUCAO: Record<Execucao['tipo'], string> = {
   mapear: 'Mapeador',
   revisar: 'Revisor',
   editar: 'Editor',
+  converter: 'Conversor',
 };
 
 const ACEITOS = '.pdf,.docx,.txt,.md,.csv,.vtt,.srt';
@@ -440,7 +441,7 @@ function ItemExecucao({
 }) {
   const [aberto, setAberto] = useState(x.status !== 'concluida' || x.aplicadaNaVersao === null);
   const duracao = x.concluidoEm ? Math.round((new Date(x.concluidoEm).getTime() - new Date(x.criadoEm).getTime()) / 1000) : null;
-  const proposta = (x.tipo === 'mapear' || x.tipo === 'editar') && x.status === 'concluida' ? (x.saida as unknown as SaidaProposta) : null;
+  const proposta = (x.tipo === 'mapear' || x.tipo === 'editar' || x.tipo === 'converter') && x.status === 'concluida' ? (x.saida as unknown as SaidaProposta) : null;
   const revisao = x.tipo === 'revisar' && x.status === 'concluida' ? (x.saida as unknown as SaidaRevisao) : null;
   const pedido = x.tipo === 'editar' ? String((x.entrada as { pedido?: string } | null)?.pedido ?? '') : '';
 

@@ -185,3 +185,66 @@ test('execução interrompida pelo desligamento é marcada como falha no próxim
   const [e] = await repo.listarExecucoes(id);
   assert.equal(e!.status, 'falhou');
 });
+
+test('importar: BPMN do Bora Mapear mantém as posições; Mermaid vira mapeamento; formato desconhecido sugere a IA', async () => {
+  const { pedir } = montar();
+  const { renderizarBpmn, renderizarMermaid, calcularLayout } = await import('@bora-mapear/core');
+  const m = exemplo();
+  const auto = calcularLayout(m);
+  const xml = renderizarBpmn(m, { correcoes: { versao: 1, nos: { E04: { x: auto.nos['E04']!.x + 30, y: auto.nos['E04']!.y } }, arestas: {}, raias: {} } });
+  const bpmn = await pedir('POST', '/api/mapeamentos/importar', { nome: 'Pedido importado', conteudo: xml });
+  assert.equal(bpmn.status, 201);
+  assert.equal(bpmn.dados.validacao.ok, true);
+  const { dados } = await pedir('GET', `/api/mapeamentos/${bpmn.dados.mapeamento.id}`);
+  assert.equal(dados.matriz.processo.nome, 'Pedido importado');
+  assert.equal(dados.visoes.bpmn.correcoes.nos.E04.x, auto.nos['E04']!.x + 30);
+
+  const mmd = await pedir('POST', '/api/mapeamentos/importar', { nome: 'Do Mermaid', conteudo: renderizarMermaid(m) });
+  assert.equal(mmd.status, 201);
+  assert.equal(mmd.dados.mapeamento.linguagem, 'mermaid');
+
+  const lista = await pedir('POST', '/api/mapeamentos/importar', { nome: 'Lista', conteudo: '1. cliente pede\n2. vendedor atende' });
+  assert.equal(lista.status, 422);
+  assert.equal(lista.dados.detalhes.podeUsarIa, true);
+});
+
+test('importar com IA: cria o mapeamento e o Conversor propõe a matriz', async () => {
+  const { pedir } = montar([() => respostaOpenAI(exemplo())]);
+  await preparar(pedir);
+  const r = await pedir('POST', '/api/mapeamentos/importar-com-ia', { nome: 'Da lista', conteudo: '1. cliente pede\n2. vendedor atende' });
+  assert.equal(r.status, 202);
+  await executor.aguardar();
+  const { dados: exec } = await pedir('GET', `/api/execucoes/${r.dados.execucao.id}`);
+  assert.equal(exec.status, 'concluida', exec.erro);
+  const aplicada = await pedir('POST', `/api/execucoes/${exec.id}/aplicar`, {});
+  assert.equal(aplicada.dados.versao.autor, 'agente:conversor');
+});
+
+test('estilo: guarda, valida e o Visual aprende das cores salvas em todos os mapeamentos', async () => {
+  const { pedir, chamadas } = montar([
+    () => respostaOpenAI({ regras: [{ descricao: 'Manuais em laranja', quando: { tipos: ['tarefa_manual'] }, corFundo: '#fff3e0' }], observacoes: ['Você pinta só tarefas.'] }),
+  ]);
+  const { id } = await preparar(pedir);
+  assert.deepEqual((await pedir('GET', '/api/estilo')).dados, { versao: 1, regras: [] });
+  assert.equal((await pedir('PUT', '/api/estilo', { versao: 1, regras: [{ descricao: 'x', quando: {}, corFundo: 'laranja' }] })).status, 400);
+
+  const semCor = await pedir('POST', '/api/estilo/aprender', {});
+  assert.equal(semCor.status, 422, 'sem exemplos de cor ainda');
+
+  // Duas tarefas pintadas no mapeamento em branco (E02 é tarefa_usuario) e no exemplo importado.
+  await pedir('PUT', `/api/mapeamentos/${id}/visoes/bpmn/correcoes`, { correcoes: { versao: 1, nos: { E02: { corFundo: '#fff3e0' } }, arestas: {}, raias: {} } });
+  const { renderizarMermaid } = await import('@bora-mapear/core');
+  const imp = await pedir('POST', '/api/mapeamentos/importar', { nome: 'Outro', conteudo: renderizarMermaid(exemplo()) });
+  await pedir('PUT', `/api/mapeamentos/${imp.dados.mapeamento.id}/visoes/reactflow/correcoes`, {
+    correcoes: { versao: 1, nos: { E07: { corFundo: '#fff3e0', corBorda: '#ef6c00' } }, arestas: {}, raias: {} },
+  });
+  const r = await pedir('POST', '/api/estilo/aprender', {});
+  assert.equal(r.status, 200);
+  assert.equal(r.dados.exemplos, 2);
+  assert.deepEqual(r.dados.cobertura, [{ vale: 1, acerta: 1 }]);
+  const enviado = (chamadas[0]!.corpo['messages'] as Array<{ content: string }>)[1]!.content;
+  assert.match(enviado, /"tipo":"tarefa_manual","raia":"Logística"/);
+  assert.match(enviado, /Pintou/);
+  assert.equal((await pedir('PUT', '/api/estilo', r.dados.estilo)).status, 200);
+  assert.equal((await pedir('GET', '/api/estilo')).dados.regras.length, 1);
+});

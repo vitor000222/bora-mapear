@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { apiIa, ErroApi, formatarCusto, type AgenteConfiguravel, type ConfigAgente, type Esforco, type Provedor, type TipoProvedor } from '../api.ts';
+import { GRUPOS_TIPO, ROTULOS_TIPO, type TipoEtapa } from '@bora-mapear/core';
+import {
+  apiIa,
+  ErroApi,
+  formatarCusto,
+  type AgenteConfiguravel,
+  type ConfigAgente,
+  type Esforco,
+  type EstiloVisual,
+  type Provedor,
+  type RegraVisual,
+  type TipoProvedor,
+} from '../api.ts';
 import { useAvisos } from '../avisos.tsx';
 
 interface Predefinido {
@@ -28,6 +40,8 @@ const NOMES_AGENTE: Record<AgenteConfiguravel, string> = {
   mapeador: 'Mapeador',
   revisor: 'Revisor',
   editor: 'Editor',
+  conversor: 'Conversor',
+  visual: 'Visual',
 };
 
 const ESFORCOS: Array<{ valor: Esforco | ''; nome: string }> = [
@@ -126,7 +140,187 @@ export function Configuracoes() {
           />
         ))}
       </div>
+
+      <SecaoEstilo />
     </section>
+  );
+}
+
+const NOMES_FAMILIA: Record<string, string> = { evento: 'Eventos', tarefa: 'Tarefas', subprocesso: 'Subprocessos', gateway: 'Decisões e gateways' };
+
+function resumoCondicao(r: RegraVisual): string {
+  const q = r.quando;
+  const partes = [
+    q.tipos?.length && q.tipos.map((t) => ROTULOS_TIPO[t]).join(', '),
+    q.familias?.length && q.familias.map((f) => NOMES_FAMILIA[f]).join(', '),
+    q.raias?.length && `raia ${q.raias.join(', ')}`,
+    q.nomeContem && `nome com "${q.nomeContem}"`,
+    q.revisarHumano && 'pede revisão humana',
+    q.semEvidencia && 'sem evidência',
+  ].filter(Boolean);
+  return partes.length ? partes.join(' · ') : 'todas as etapas';
+}
+
+function Amostra({ regra }: { regra: Pick<RegraVisual, 'corFundo' | 'corBorda'> }) {
+  return <span className="amostra amostra-fixa" style={{ background: regra.corFundo ?? '#ffffff', borderColor: regra.corBorda ?? '#9aa1ad' }} aria-hidden />;
+}
+
+interface PropostaEstilo {
+  estilo: EstiloVisual;
+  observacoes: string[];
+  cobertura: Array<{ vale: number; acerta: number }>;
+  exemplos: number;
+}
+
+/** O estilo visual: regras de cor que o "Aplicar meu estilo" usa em qualquer desenho. */
+function SecaoEstilo() {
+  const avisar = useAvisos();
+  const [estilo, setEstilo] = useState<EstiloVisual | null>(null);
+  const [proposta, setProposta] = useState<PropostaEstilo | null>(null);
+  const [aprendendo, setAprendendo] = useState(false);
+  const [alvo, setAlvo] = useState<string>('tipo:tarefa_manual');
+  const [fundo, setFundo] = useState('#fff3e0');
+  const [borda, setBorda] = useState('#ef6c00');
+
+  useEffect(() => {
+    apiIa.estilo().then(setEstilo, (e: unknown) => avisar(mensagemDe(e), 'erro'));
+  }, [avisar]);
+
+  const salvar = async (novo: EstiloVisual, texto: string) => {
+    try {
+      setEstilo(await apiIa.salvarEstilo(novo));
+      avisar(texto, 'sucesso');
+    } catch (e) {
+      avisar(mensagemDe(e), 'erro', e instanceof ErroApi ? e.detalhes : undefined);
+    }
+  };
+
+  const aprender = async () => {
+    setAprendendo(true);
+    try {
+      setProposta(await apiIa.aprenderEstilo());
+    } catch (e) {
+      avisar(mensagemDe(e), 'erro');
+    } finally {
+      setAprendendo(false);
+    }
+  };
+
+  const adicionar = () => {
+    if (!estilo) return;
+    const [tipoAlvo, valor] = alvo.split(':') as ['tipo' | 'familia', string];
+    const nome = tipoAlvo === 'tipo' ? ROTULOS_TIPO[valor as TipoEtapa] : (NOMES_FAMILIA[valor] ?? valor);
+    const regra: RegraVisual = {
+      descricao: `${nome} em ${fundo}`,
+      quando: tipoAlvo === 'tipo' ? { tipos: [valor as TipoEtapa] } : { familias: [valor as 'evento' | 'tarefa' | 'subprocesso' | 'gateway'] },
+      corFundo: fundo,
+      corBorda: borda,
+    };
+    void salvar({ versao: 1, regras: [...estilo.regras, regra] }, 'Regra adicionada.');
+  };
+
+  return (
+    <div className="cartao secao">
+      <div className="secao-cabecalho">
+        <h2>Estilo visual</h2>
+        <span className="suave pequeno">Regras de cor que o botão "Aplicar meu estilo" usa em qualquer desenho. A de baixo vence.</span>
+      </div>
+      {estilo?.regras.length === 0 && (
+        <p className="suave">Nenhuma regra ainda. Crie uma abaixo, ou deixe o agente Visual aprender com as cores que você já aplicou.</p>
+      )}
+      <ol className="lista-regras">
+        {estilo?.regras.map((r, i) => (
+          <li key={i}>
+            <Amostra regra={r} />
+            <div>
+              <strong>{r.descricao}</strong>
+              <div className="suave pequeno">{resumoCondicao(r)}</div>
+            </div>
+            <button
+              className="icone icone-perigo"
+              aria-label={`Remover a regra ${r.descricao}`}
+              onClick={() => void salvar({ versao: 1, regras: estilo.regras.filter((_, j) => j !== i) }, 'Regra removida.')}
+            >
+              ✕
+            </button>
+          </li>
+        ))}
+      </ol>
+      <div className="nova-regra">
+        <select className="entrada" value={alvo} onChange={(e) => setAlvo(e.target.value)} aria-label="Etapas da regra">
+          <optgroup label="Família">
+            {Object.entries(NOMES_FAMILIA).map(([f, nome]) => (
+              <option key={f} value={`familia:${f}`}>
+                {nome}
+              </option>
+            ))}
+          </optgroup>
+          {GRUPOS_TIPO.map((g) => (
+            <optgroup key={g.grupo} label={g.grupo}>
+              {g.tipos.map((t) => (
+                <option key={t} value={`tipo:${t}`}>
+                  {ROTULOS_TIPO[t]}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <label className="campo-cor">
+          Fundo <input type="color" value={fundo} onChange={(e) => setFundo(e.target.value)} />
+        </label>
+        <label className="campo-cor">
+          Borda <input type="color" value={borda} onChange={(e) => setBorda(e.target.value)} />
+        </label>
+        <button className="botao" onClick={adicionar} disabled={!estilo}>
+          + Regra
+        </button>
+        <button className="botao botao-primario" onClick={() => void aprender()} disabled={aprendendo} title="O agente Visual lê as cores que você aplicou nos desenhos e propõe regras">
+          {aprendendo ? 'Aprendendo…' : 'Aprender com minhas correções'}
+        </button>
+      </div>
+      {proposta && (
+        <div className="proposta">
+          <strong>Proposta do agente Visual</strong>
+          <span className="suave pequeno">Tirada de {proposta.exemplos} etapas que você pintou.</span>
+          {proposta.estilo.regras.length === 0 && <p className="pequeno">Nenhuma regra: não achou padrão.</p>}
+          <ol className="lista-regras">
+            {proposta.estilo.regras.map((r, i) => (
+              <li key={i}>
+                <Amostra regra={r} />
+                <div>
+                  <strong>{r.descricao}</strong>
+                  <div className="suave pequeno">
+                    {resumoCondicao(r)} · acerta {proposta.cobertura[i]?.acerta ?? 0} de {proposta.cobertura[i]?.vale ?? 0} exemplos
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ol>
+          {proposta.observacoes.length > 0 && (
+            <ul className="pequeno suave">
+              {proposta.observacoes.map((o) => (
+                <li key={o}>{o}</li>
+              ))}
+            </ul>
+          )}
+          <div className="barra-visao-acoes">
+            <button
+              className="botao botao-primario"
+              disabled={!proposta.estilo.regras.length}
+              onClick={() => {
+                void salvar(proposta.estilo, 'Estilo atualizado.');
+                setProposta(null);
+              }}
+            >
+              Usar este estilo
+            </button>
+            <button className="botao" onClick={() => setProposta(null)}>
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

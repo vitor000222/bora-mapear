@@ -83,6 +83,8 @@ const ESTILOS: Record<string, string> = {
 export interface OpcoesMermaid {
   /** LR (padrão) ou TB. */
   direcao?: 'LR' | 'TB';
+  /** Cor por chave (do estilo visual), escrita como "style". */
+  cores?: Record<string, { corFundo?: string; corBorda?: string }>;
 }
 
 /**
@@ -120,6 +122,11 @@ export function renderizarMermaid(m: Matriz, opcoes: OpcoesMermaid = {}): string
   for (const [classe, membros] of porClasse) {
     linhas.push(`  classDef ${classe} ${ESTILOS[classe]}`);
     linhas.push(`  class ${membros.join(',')} ${classe}`);
+  }
+  for (const [chave, cor] of Object.entries(opcoes.cores ?? {})) {
+    const id = ids.get(chave);
+    const partes = [cor.corFundo && `fill:${cor.corFundo}`, cor.corBorda && `stroke:${cor.corBorda}`].filter(Boolean);
+    if (id && partes.length) linhas.push(`  style ${id} ${partes.join(',')}`);
   }
   return linhas.join('\n') + '\n';
 }

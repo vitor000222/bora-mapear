@@ -37,11 +37,15 @@ compartilhadas entre BPMN e React Flow.
 
 Ficou para depois: transcrever áudio e vídeo, OCR de PDF escaneado, e cancelar uma execução em andamento.
 
-## Fase 3 — Aprender com a correção
+## Fase 3 — Aprender com a correção ✅
 
-- [ ] Agente Visual usa o registro de correções como exemplo
-- [ ] Importador BPMN → matriz: edição de conteúdo no editor visual vira proposta de nova versão
-- [ ] Conversor Mermaid → matriz
+- [x] Agente Visual: aprende regras de estilo (cor por tipo, família, raia, revisão) a partir das cores aplicadas e do registro de correções; "Aplicar meu estilo" em BPMN, React Flow e Mermaid
+- [x] Importador BPMN → matriz, determinístico: edição de conteúdo no bpmn-js vira proposta de nova versão, com o que mudou em frases
+- [x] Importador Mermaid → matriz, determinístico; o que ele não lê vai para o agente Conversor
+- [x] Importar processo de outra ferramenta (BPMN, Mermaid, ou qualquer texto pelo Conversor)
+- [x] Comparar duas matrizes em frases
+
+Ficou para depois: estilo de espaçamento e de ordem das raias, e posições aprendidas (hoje o estilo é só de cor).
 
 ## Fase 4 — Para usar de verdade
 
