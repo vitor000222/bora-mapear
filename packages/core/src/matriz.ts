@@ -153,11 +153,12 @@ export type Matriz = z.infer<typeof MatrizSchema>;
 export type MatrizEntrada = z.input<typeof MatrizSchema>;
 
 /** Lê e normaliza uma matriz. Lança erro com os campos inválidos se o formato não bater. */
-export function lerMatriz(dado: unknown): Matriz {
+export function lerMatriz(dado: unknown, idioma: Idioma = 'pt'): Matriz {
   const resultado = MatrizSchema.safeParse(dado);
   if (!resultado.success) {
-    const linhas = resultado.error.issues.map((i) => `- ${i.path.join('.') || '(raiz)'}: ${i.message}`);
-    throw new Error(`Matriz fora do formato:\n${linhas.join('\n')}`);
+    const raiz = idioma === 'en' ? '(root)' : '(raiz)';
+    const linhas = resultado.error.issues.map((i) => `- ${i.path.join('.') || raiz}: ${i.message}`);
+    throw new Error(`${idioma === 'en' ? 'The matrix is not in the expected format:' : 'Matriz fora do formato:'}\n${linhas.join('\n')}`);
   }
   return resultado.data;
 }

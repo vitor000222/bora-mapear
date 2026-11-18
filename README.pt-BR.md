@@ -138,7 +138,9 @@ responde como cada agente sem chamar modelo nenhum. Cadastre-o como "Ollama (loc
 npm run exemplo
 ```
 
-Isso valida e desenha [`exemplos/pedido-de-venda.json`](exemplos/pedido-de-venda.json) em `saida/`:
+Isso valida e desenha [`exemplos/pedido-de-venda.json`](exemplos/pedido-de-venda.json) em `saida/`.
+`npm run example` faz o mesmo com a versão em inglês, [`exemplos/sales-order.json`](exemplos/sales-order.json),
+em `output/`.
 
 | Arquivo | O que é |
 |---|---|
@@ -150,11 +152,23 @@ Isso valida e desenha [`exemplos/pedido-de-venda.json`](exemplos/pedido-de-venda
 ### A linha de comando
 
 ```bash
-node packages/core/src/cli.ts validar   exemplos/pedido-de-venda.json
+node packages/core/src/cli.ts validar    exemplos/pedido-de-venda.json
 node packages/core/src/cli.ts renderizar exemplos/pedido-de-venda.json --saida saida
-node packages/core/src/cli.ts extrair   desenho-editado.bpmn --matriz exemplos/pedido-de-venda.json
+node packages/core/src/cli.ts extrair    desenho-editado.bpmn --matriz exemplos/pedido-de-venda.json
 node packages/core/src/cli.ts schema
+node packages/core/src/cli.ts --ajuda
 ```
+
+| Comando | Em inglês | O que faz |
+|---|---|---|
+| `validar` | `validate` | Roda o portão e lista erros e avisos. |
+| `renderizar` | `render` | Grava os arquivos `.bpmn`, `.mmd`, `.reactflow.json` e `.html`. Para se o portão reprovar, a menos que venha `--forcar`. |
+| `extrair` | `extract` | Compara um BPMN editado com o layout automático e grava só o que mudou. |
+| `schema` | `schema` | Imprime o JSON Schema da matriz. |
+
+Opções: `--saida` (`--output`), `--matriz` (`--matrix`), `--correcoes` (`--corrections`), `--forcar`
+(`--force`) e `--idioma pt|en` (`--lang`). Os comandos em português respondem em português e os em inglês, em
+inglês, inclusive nos rótulos que vão para os arquivos; `--idioma` manda mais.
 
 `extrair` é o ciclo da correção: abra o `.bpmn` no bpmn.io, mova e pinte o que quiser, exporte, e o
 comando devolve só o que você mudou, em JSON e em frases.

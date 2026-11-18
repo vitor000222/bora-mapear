@@ -59,10 +59,10 @@ Left for later: style for spacing and lane order, and learned positions (today t
 - [x] English interface: selector at the top; screens, gate, importer warnings, correction log, server errors, example and CSV in the chosen language; with the interface in English, the agents write in English
 - [x] English README (`README.md`), with the Portuguese version in `README.pt-BR.md`
 - [x] English documentation in `docs/` (architecture, matrix, roadmap), with the Portuguese versions in `*.pt-BR.md`
+- [x] English command line: English command and option names (`validate`, `render`, `extract`, `--output`…) next to the Portuguese ones; messages, labels in the files and the HTML preview in the chosen language
 
 Left for later: `docker compose` has not been run end to end yet (Postgres itself is covered by the suite on
-PGlite); importing XLSX directly, without going through CSV; the command line (`cli.ts`) is still Portuguese
-only.
+PGlite); importing XLSX directly, without going through CSV.
 
 ## Phase 5 — In the cloud
 

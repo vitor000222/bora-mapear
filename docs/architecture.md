@@ -167,7 +167,7 @@ The notation is an attribute of the view. Switching means rendering the same mat
 ## Languages
 
 Portuguese and English, chosen in the selector at the top (stored in the browser; the first time, the
-browser's language applies). Three layers, each with its own dictionary:
+browser's language applies). Four layers, each with its own dictionary:
 
 - **Interface** (`apps/web/src/i18n/`): one area per screen in `textos/` (texts), with `pt` as the source and
   `en: typeof pt`, so a missing English key is a compile error. Components use `useTextos()`; what runs outside
@@ -179,6 +179,10 @@ browser's language applies). Three layers, each with its own dictionary:
   correction log sentences in that language, and creates the example and the blank process map in it. The
   agents get the language through the model client and write their output in it; evidence quotes stay word
   for word.
+- **Command line** (`packages/core/src/cli.ts`): each command has an English and a Portuguese name (`render` /
+  `renderizar`) and answers in the language of the name it was called by; `--lang` overrides it, and with no
+  command the system locale decides. The language also goes into the files it writes (BPMN documentation, the
+  Mermaid header, the HTML preview).
 
 User content (names, the matrix, version messages already saved) stays in the language it was written in.
 

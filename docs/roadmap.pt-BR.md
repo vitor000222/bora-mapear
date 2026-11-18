@@ -59,10 +59,10 @@ Ficou para depois: estilo de espaçamento e de ordem das raias, e posições apr
 - [x] Interface em inglês: seletor no topo; telas, portão, avisos dos importadores, registro de correções, erros do servidor, exemplo e CSV no idioma escolhido; com a interface em inglês, os agentes escrevem em inglês
 - [x] README em inglês (`README.md`), com a versão em português em `README.pt-BR.md`
 - [x] Documentação de `docs/` em inglês (arquitetura, matriz, roadmap), com as versões em português em `*.pt-BR.md`
+- [x] Linha de comando em inglês: comandos e opções com nome em inglês (`validate`, `render`, `extract`, `--output`…) ao lado dos em português; mensagens, rótulos dos arquivos e prévia HTML no idioma escolhido
 
 Ficou para depois: o `docker compose` ainda não foi rodado de ponta a ponta (o Postgres em si é coberto pela
-suíte sobre PGlite); importar XLSX direto, sem passar por CSV; a linha de comando (`cli.ts`) continua só em
-português.
+suíte sobre PGlite); importar XLSX direto, sem passar por CSV.
 
 ## Fase 5 — Na nuvem
 

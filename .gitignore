@@ -1,5 +1,6 @@
 node_modules/
 saida/
+output/
 data/
 dist/
 .env

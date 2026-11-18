@@ -164,7 +164,7 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
 ## Idiomas
 
 Português e inglês, escolhidos no seletor do topo (guardado no navegador; na primeira vez, vale o idioma do
-navegador). Três camadas, cada uma com o seu dicionário:
+navegador). Quatro camadas, cada uma com o seu dicionário:
 
 - **Interface** (`apps/web/src/i18n/`): uma área por tela em `textos/`, com `pt` como fonte e `en: typeof pt`,
   então faltar uma chave em inglês é erro de compilação. Componentes usam `useTextos()`; o que roda fora do
@@ -174,6 +174,10 @@ navegador). Três camadas, cada uma com o seu dicionário:
 - **Servidor**: a interface manda `Accept-Language`; o servidor responde erros, portão, avisos e frases do
   registro nesse idioma, e cria o exemplo e o mapeamento em branco nele. Os agentes recebem o idioma pelo
   cliente do modelo e escrevem a saída nele; as citações das evidências continuam literais.
+- **Linha de comando** (`packages/core/src/cli.ts`): cada comando tem nome em português e em inglês
+  (`renderizar` / `render`) e responde no idioma do nome usado; `--idioma` manda mais, e sem comando vale o
+  locale do sistema. O idioma vai também para os arquivos que ela grava (documentação do BPMN, cabeçalho do
+  Mermaid, prévia HTML).
 
 O que é conteúdo do usuário (nomes, matriz, mensagens de versão já gravadas) fica no idioma em que foi escrito.
 

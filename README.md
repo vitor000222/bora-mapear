@@ -11,8 +11,8 @@ kept.
 > Status: **phase 4 — Postgres, SVG/PNG/PDF export, matrix as CSV, subprocesses and an English interface**. Next:
 > cloud mode ([roadmap](docs/roadmap.md)).
 >
-> The interface comes in Portuguese and English: pick one in the selector at the top. The code itself is in
-> Portuguese for now.
+> The interface and the command line come in Portuguese and English: the selector at the top of the app, or
+> `--lang` on the command line. The code itself is in Portuguese.
 
 ## The idea
 
@@ -143,16 +143,12 @@ run. Calls go from the server straight to the provider.
 ## The core on its own
 
 ```bash
-npm run exemplo
+npm run example
 ```
 
-This validates and draws [`exemplos/pedido-de-venda.json`](exemplos/pedido-de-venda.json), a sales order process
-in Portuguese, into `saida/` (*saída* means output). The same process in English is
-[`exemplos/sales-order.json`](exemplos/sales-order.json):
-
-```bash
-node packages/core/src/cli.ts renderizar exemplos/sales-order.json --saida saida
-```
+This validates and draws [`exemplos/sales-order.json`](exemplos/sales-order.json) into `output/`.
+`npm run exemplo` does the same with the Portuguese version,
+[`exemplos/pedido-de-venda.json`](exemplos/pedido-de-venda.json), into `saida/`.
 
 | File | What it is |
 |---|---|
@@ -163,18 +159,26 @@ node packages/core/src/cli.ts renderizar exemplos/sales-order.json --saida saida
 
 ### The command line
 
-The command line speaks Portuguese for now: `validar` (validate), `renderizar` (render), `extrair` (extract) and
-`schema`, with the options `--saida` (output folder), `--matriz` (matrix file) and `--correcoes` (corrections
-file). Its messages and the labels it writes are in Portuguese too.
-
 ```bash
-node packages/core/src/cli.ts validar   exemplos/sales-order.json
-node packages/core/src/cli.ts renderizar exemplos/sales-order.json --saida saida
-node packages/core/src/cli.ts extrair   edited-diagram.bpmn --matriz exemplos/sales-order.json
+node packages/core/src/cli.ts validate exemplos/sales-order.json
+node packages/core/src/cli.ts render   exemplos/sales-order.json --output output
+node packages/core/src/cli.ts extract  edited-diagram.bpmn --matrix exemplos/sales-order.json
 node packages/core/src/cli.ts schema
+node packages/core/src/cli.ts --help
 ```
 
-`extrair` is the correction loop: open the `.bpmn` in bpmn.io, move and color whatever you want, export it, and the
+| Command | In Portuguese | What it does |
+|---|---|---|
+| `validate` | `validar` | Runs the gate and lists errors and warnings. |
+| `render` | `renderizar` | Writes the `.bpmn`, `.mmd`, `.reactflow.json` and `.html` files. Stops if the gate fails, unless you pass `--force`. |
+| `extract` | `extrair` | Compares an edited BPMN with the automatic layout and saves only what changed. |
+| `schema` | `schema` | Prints the JSON Schema of the matrix. |
+
+Options: `--output` (`--saida`), `--matrix` (`--matriz`), `--corrections` (`--correcoes`), `--force`
+(`--forcar`) and `--lang en|pt` (`--idioma`). The English command names answer in English and the Portuguese
+ones in Portuguese, including the labels written into the files; `--lang` overrides that.
+
+`extract` is the correction loop: open the `.bpmn` in bpmn.io, move and color whatever you want, export it, and the
 command returns only what you changed, as JSON and as sentences.
 
 ### Tests
