@@ -1,34 +1,41 @@
 # Bora Mapear
 
-**Mapeamento de processos com IA, de código aberto.** Você manda o POP, a transcrição da entrevista ou o
-documento do processo; os agentes montam a matriz; o Bora Mapear desenha em BPMN, Mermaid ou React Flow.
-Você corrige o desenho, e a correção fica guardada.
+**English** · [Português](README.pt-BR.md)
 
-> Status: **fase 4 — Postgres, exportar em SVG/PNG/PDF, matriz em CSV, subprocessos e interface em inglês**. Próximo: modo nuvem ([roadmap](docs/roadmap.md)).
+**Open-source process mapping with AI.** You send the SOP, the interview transcript or the process document; the
+agents build the matrix; Bora Mapear draws it in BPMN, Mermaid or React Flow. You fix the diagram, and the fix is
+kept.
+
+*Bora mapear* is Brazilian Portuguese for "let's map it".
+
+> Status: **phase 4 — Postgres, SVG/PNG/PDF export, matrix as CSV, subprocesses and an English interface**. Next:
+> cloud mode ([roadmap](docs/roadmap.md)).
 >
-> *The interface is available in English too: pick it in the language selector at the top.*
+> The interface comes in Portuguese and English: pick one in the selector at the top. The docs in `docs/` and the
+> code itself are in Portuguese for now.
 
-## A ideia
+## The idea
 
 ```
-Documentos ─► Agentes ─► MATRIZ ─► Portão ─► Mermaid · React Flow · BPMN
-                            ▲                          │
-                            └──── correções ◄──────────┘
+Documents ─► Agents ─► MATRIX ─► Gate ─► Mermaid · React Flow · BPMN
+                          ▲                        │
+                          └──── corrections ◄──────┘
 ```
 
-- **A matriz é a fonte da verdade.** Uma linha por etapa, com chave estável, raia, tipo e as saídas.
-- **A IA escreve linhas da matriz, nunca XML.** O desenho sai de um renderizador determinístico.
-- **Trocar de linguagem é re-renderizar.** A mesma matriz vira BPMN, Mermaid ou React Flow.
-- **A correção visual é dado.** Moveu, pintou, redesenhou uma seta: fica guardado por chave e sobrevive
-  à próxima versão da matriz.
-- **Sua chave, seu banco.** Você usa a sua chave de API (OpenRouter ou qualquer provedor compatível) e
-  roda local, com SQLite, ou no seu Postgres.
+- **The matrix is the source of truth.** One row per step, with a stable key, lane, type and outgoing flows.
+- **AI writes matrix rows, never XML.** The diagram comes out of a deterministic renderer.
+- **Switching diagram languages is just a re-render.** The same matrix becomes BPMN, Mermaid or React Flow.
+- **A visual fix is data.** Moved a box, colored it, rerouted an arrow: it is stored by key and survives the next
+  version of the matrix.
+- **Your key, your database.** You use your own API key (OpenRouter or any compatible provider) and run it
+  locally, with SQLite, or on your own Postgres.
 
-Detalhes em [docs/arquitetura.md](docs/arquitetura.md) e [docs/matriz.md](docs/matriz.md).
+Details (in Portuguese) in [docs/arquitetura.md](docs/arquitetura.md) (architecture) and
+[docs/matriz.md](docs/matriz.md) (the matrix).
 
-## Rodar local
+## Run locally
 
-Precisa de Node 22.18 ou mais novo. Mais nada: o banco é SQLite num arquivo, com o módulo nativo do Node.
+Requires Node 22.18 or newer. Nothing else: the database is SQLite in a file, through Node's built-in module.
 
 ```bash
 git clone https://github.com/vitor000222/bora-mapear && cd bora-mapear
@@ -36,164 +43,180 @@ npm install
 npm run dev
 ```
 
-Abra http://127.0.0.1:5173. O banco fica em `data/bora.db` e é criado sozinho.
+Open http://127.0.0.1:5173. The database lives in `data/bora.db` and is created on the first run.
 
-Para usar sem modo de desenvolvimento, numa porta só:
+To run it without dev mode, on a single port:
 
 ```bash
 npm run build
 npm start          # http://127.0.0.1:3737
 ```
 
-| Variável | Padrão | Para quê |
+| Variable | Default | What for |
 |---|---|---|
-| `PORTA` | `3737` | porta do servidor |
-| `HOST` | `127.0.0.1` | troque para `0.0.0.0` para abrir na rede |
-| `BORA_DB` | `data/bora.db` | caminho do arquivo do banco (SQLite) |
-| `DATABASE_URL` | (vazio) | `postgres://…`: usa o seu Postgres em vez do SQLite |
-| `BORA_SECRET` | (arquivo `data/segredo.key`) | chave-mestra que cifra as chaves de API |
+| `PORTA` | `3737` | server port (*porta* is Portuguese for port) |
+| `HOST` | `127.0.0.1` | set it to `0.0.0.0` to open the app on your network |
+| `BORA_DB` | `data/bora.db` | path of the database file (SQLite) |
+| `DATABASE_URL` | (empty) | `postgres://…`: use your Postgres instead of SQLite |
+| `BORA_SECRET` | (file `data/segredo.key`) | master key that encrypts the API keys |
 
-### Com Postgres
+### With Postgres
 
-O seu banco: `DATABASE_URL=postgres://usuario:senha@host:5432/bora npm start`. As tabelas são criadas na
-primeira vez.
+Your own database: `DATABASE_URL=postgres://user:password@host:5432/bora npm start`. The tables are created on
+the first run.
 
-Ou tudo em contêiner, Postgres junto:
+Or everything in containers, Postgres included:
 
 ```bash
-cp .env.example .env      # troque BORA_SECRET por um texto longo e aleatório
+cp .env.example .env      # set BORA_SECRET to a long random string
 docker compose up -d      # http://127.0.0.1:3737
 ```
 
-Guarde a `BORA_SECRET`: sem ela, as chaves de API cadastradas não abrem mais.
+Keep your `BORA_SECRET` safe: without it, the API keys you registered can no longer be decrypted.
 
-### O que dá para fazer
+### What you can do
 
-- Criar mapeamentos em branco ou pelo exemplo, escolhendo a linguagem (dá para trocar depois).
-- Editar a **matriz** como planilha: raias, etapas, tipo, raia, sistema e próximos. O portão confere enquanto
-  você digita e aponta a linha com problema. Cada gravação vira uma **versão**, e qualquer versão pode ser
-  restaurada.
-- **BPMN**: editar no bpmn-js (arrastar, redimensionar, pintar, redesenhar setas), baixar `.bpmn` e SVG.
-- **React Flow**: arrastar e pintar, com as setas traçadas pelo mesmo roteador do BPMN.
-- **Mermaid**: ver o desenho e editar o código à mão, com prévia ao vivo.
-- **Salvar correções**: só o que você mudou na forma é guardado, por chave, e sobrevive às próximas versões da
-  matriz. Cada gravação vira frases no **registro de correções** ("Moveu *Analisar crédito* 60 px para a direita").
-- **Exportar** o desenho em SVG, PNG ou PDF (vetorial, com texto selecionável), nas três linguagens.
-- **Matriz em planilha**: "Exportar CSV" abre no Excel e no Google Planilhas; edite lá e traga de volta com
-  "Importar CSV". O que voltou passa pelo portão e só vira versão quando você salvar.
-- **Subprocessos**: numa etapa do tipo subprocesso, "Criar mapeamento filho" abre um mapeamento novo para
-  detalhá-la (ou ligue a um que já existe). No desenho, duplo clique na etapa abre o filho; no filho, uma
-  faixa mostra de qual processo ele faz parte.
-- **Português ou inglês**: o seletor no topo troca a interface inteira, as mensagens do portão, os avisos, o
-  registro de correções, o exemplo e o CSV. O conteúdo da matriz é seu e não é traduzido; com a interface em
-  inglês, os agentes escrevem o que produzem em inglês.
+- Create process maps from scratch or from the example, choosing the diagram language (you can switch later).
+- Edit the **matrix** like a spreadsheet: lanes, steps, type, lane, system and next steps. The gate checks it as
+  you type and points at the row with the problem. Every save becomes a **version**, and any version can be
+  restored.
+- **BPMN**: edit in bpmn-js (drag, resize, color, reroute arrows), download the `.bpmn` and an SVG.
+- **React Flow**: drag and color, with the arrows routed by the same router as the BPMN.
+- **Mermaid**: see the diagram and edit the code by hand, with a live preview.
+- **Save corrections**: only what you changed in the layout is stored, by key, and it survives the next versions
+  of the matrix. Each save turns into sentences in the **correction log** ("Moved *Check customer credit* 60 px
+  to the right").
+- **Export** the diagram as SVG, PNG or PDF (vector, with selectable text), in all three diagram languages.
+- **Matrix as a spreadsheet**: "Export CSV" opens in Excel and Google Sheets; edit it there and bring it back with
+  "Import CSV". What comes back goes through the gate and only becomes a version when you save.
+- **Subprocesses**: on a subprocess step, "Create child map" opens a new process map to detail it (or links one
+  that already exists). In the diagram, double-click the step to open the child; in the child, a banner shows
+  which process it belongs to.
+- **Portuguese or English**: the selector at the top switches the whole interface, the gate messages, the
+  warnings, the correction log, the example and the CSV. The matrix content is yours and is not translated; with
+  the interface in English, the agents write what they produce in English.
 
-## Agentes de IA, com a sua chave
+## AI agents, with your key
 
-Em **Configurações**, cadastre um provedor e escolha o modelo de cada agente (ou só o padrão):
+In **Settings**, add a provider and choose the model for each agent (or just a default one):
 
-| Provedor | Como |
+| Provider | How |
 |---|---|
-| OpenRouter, OpenAI, Google Gemini, Groq, DeepSeek | compatível com a API da OpenAI (`/chat/completions`) |
-| Anthropic | SDK oficial, com saída estruturada e *fallback* do lado do servidor nos modelos Claude recentes |
-| Ollama, LM Studio | local, sem chave e sem custo |
+| OpenRouter, OpenAI, Google Gemini, Groq, DeepSeek | OpenAI-compatible API (`/chat/completions`) |
+| Anthropic | official SDK, with structured output and server-side fallback on recent Claude models |
+| Ollama, LM Studio | local, no key and no cost |
 
-Na aba **IA** de um mapeamento:
+In a process map's **AI** tab:
 
-1. **Fontes**: envie POPs, documentos e transcrições (PDF, DOCX, TXT, MD, VTT, SRT) ou cole texto.
-2. **Leitor**: tira das fontes as **evidências** (EV-001…), trechos copiados literalmente. Cada citação é
-   conferida contra o texto original; a que não bate fica marcada como "não conferida".
-3. **Mapeador**: escreve a matriz a partir das evidências. O **portão** confere; se reprovar, os erros voltam
-   ao agente, até três rodadas. Toda linha aponta a evidência que a sustenta.
-4. **Editor**: "depois de analisar o crédito, a gerência aprova acima de R$ 50 mil" vira operações sobre a
-   matriz, aplicadas por código.
-5. **Revisor**: aponta lacunas, cada uma com a pergunta para fazer ao cliente, e linhas para revisão humana.
+1. **Sources**: upload SOPs, documents and transcripts (PDF, DOCX, TXT, MD, VTT, SRT) or paste text.
+2. **Reader**: pulls the **evidence** out of the sources (EV-001…), passages copied word for word. Each quote is
+   checked against the original text; one that doesn't match is flagged as "unverified".
+3. **Mapper**: writes the matrix from the evidence. The **gate** checks it; if it fails, the errors go back to the
+   agent, for up to three rounds. Every row points to the evidence behind it.
+4. **Editor**: "after the credit check, management approves anything above US$ 50k" turns into operations on the
+   matrix, applied by code.
+5. **Reviewer**: points out gaps, each with the question to ask the client, and the rows that need human review.
 
-Nenhum agente muda a matriz sozinho: cada um devolve uma **proposta**, que você aplica como versão nova ou abre
-na Matriz para revisar antes. Cada execução mostra o progresso, os tokens e o custo.
+No agent changes the matrix on its own: each one returns a **proposal**, which you apply as a new version or open
+in the Matrix to review first. Each run shows its progress, tokens and cost.
 
-**Sobre a chave:** fica cifrada (AES-256-GCM) no banco local, nunca volta para o navegador e nunca vai para log.
-A chave-mestra vem de `BORA_SECRET` ou de `data/segredo.key`, criado na primeira vez. As chamadas saem do
-servidor direto para o provedor.
+**About the key:** it is stored encrypted (AES-256-GCM) in the local database, never goes back to the browser and
+never goes to a log. The master key comes from `BORA_SECRET` or from `data/segredo.key`, created on the first
+run. Calls go from the server straight to the provider.
 
-## Ida e volta
+## Round trip
 
-- **Importar** (na lista): BPMN 2.0 de qualquer ferramenta (Camunda, bpmn.io, Bizagi), fluxograma Mermaid e a
-  matriz em CSV entram direto, sem IA. BPMN exportado pelo próprio Bora Mapear volta com as posições do desenho. Outro formato (PlantUML,
-  lista de passos, tabela) passa pelo agente **Conversor**.
-- **Do desenho para a matriz:** renomeou, criou ou apagou etapa no bpmn-js? Ao salvar, o app mostra o que mudou e
-  oferece salvar como versão nova, revisar na Matriz ou guardar só a forma.
-- **Do código para a matriz:** editou o Mermaid à mão? "Trazer para a matriz" lê o código e abre a matriz resultante
-  para revisar.
-- **Estilo visual:** em Configurações, regras de cor ("tarefas manuais em laranja"). O agente **Visual** aprende as
-  regras a partir das cores que você já aplicou nos desenhos; "Aplicar meu estilo" pinta qualquer desenho com elas.
-  O agente escreve regras, nunca coordenadas.
+- **Import** (in the list): BPMN 2.0 from any tool (Camunda, bpmn.io, Bizagi), Mermaid flowcharts and the matrix
+  as CSV come in directly, without AI. BPMN exported by Bora Mapear itself comes back with the diagram positions.
+  Other formats (PlantUML, a list of steps, a table) go through the **Converter** agent.
+- **From the diagram to the matrix:** renamed, created or deleted a step in bpmn-js? When you save, the app shows
+  what changed and offers to save it as a new version, review it in the Matrix or save the layout only.
+- **From the code to the matrix:** edited the Mermaid by hand? "Bring to the matrix" reads the code and opens the
+  resulting matrix for review.
+- **Visual style:** in Settings, color rules ("manual tasks in orange"). The **Visual** agent learns the rules from
+  the colors you have already applied to your diagrams; "Apply my style" colors any diagram with them. The agent
+  writes rules, never coordinates.
 
-**Sem chave, para testar:** `npm run llm-falso` sobe um provedor falso em `http://127.0.0.1:11435/v1`, que
-responde como cada agente sem chamar modelo nenhum. Cadastre-o como "Ollama (local)" com essa URL.
+**No key, for testing:** `npm run llm-falso` (*falso* means fake) starts a fake provider at
+`http://127.0.0.1:11435/v1`, which answers like each agent without calling any model. Register it as
+"Ollama (local)" with that URL.
 
-## O núcleo sozinho
+## The core on its own
 
 ```bash
 npm run exemplo
 ```
 
-Isso valida e desenha [`exemplos/pedido-de-venda.json`](exemplos/pedido-de-venda.json) em `saida/`:
-
-| Arquivo | O que é |
-|---|---|
-| `pedido-de-venda.bpmn` | BPMN 2.0 com diagrama. Abre no [bpmn.io](https://demo.bpmn.io) e no Camunda Modeler. |
-| `pedido-de-venda.mmd` | Mermaid flowchart, uma raia por subgraph. |
-| `pedido-de-venda.reactflow.json` | Nós e arestas para o `@xyflow/react`. |
-| `pedido-de-venda.html` | Prévia com BPMN, Mermaid, a matriz e o resultado do portão. |
-
-### A linha de comando
+This validates and draws [`exemplos/pedido-de-venda.json`](exemplos/pedido-de-venda.json), a sales order process
+in Portuguese, into `saida/` (*saída* means output). The same process in English is
+[`exemplos/sales-order.json`](exemplos/sales-order.json):
 
 ```bash
-node packages/core/src/cli.ts validar   exemplos/pedido-de-venda.json
-node packages/core/src/cli.ts renderizar exemplos/pedido-de-venda.json --saida saida
-node packages/core/src/cli.ts extrair   desenho-editado.bpmn --matriz exemplos/pedido-de-venda.json
+node packages/core/src/cli.ts renderizar exemplos/sales-order.json --saida saida
+```
+
+| File | What it is |
+|---|---|
+| `sales-order.bpmn` | BPMN 2.0 with the diagram. Opens in [bpmn.io](https://demo.bpmn.io) and in Camunda Modeler. |
+| `sales-order.mmd` | Mermaid flowchart, one subgraph per lane. |
+| `sales-order.reactflow.json` | Nodes and edges for `@xyflow/react`. |
+| `sales-order.html` | Preview with the BPMN, the Mermaid, the matrix and the gate result. |
+
+### The command line
+
+The command line speaks Portuguese for now: `validar` (validate), `renderizar` (render), `extrair` (extract) and
+`schema`, with the options `--saida` (output folder), `--matriz` (matrix file) and `--correcoes` (corrections
+file). Its messages and the labels it writes are in Portuguese too.
+
+```bash
+node packages/core/src/cli.ts validar   exemplos/sales-order.json
+node packages/core/src/cli.ts renderizar exemplos/sales-order.json --saida saida
+node packages/core/src/cli.ts extrair   edited-diagram.bpmn --matriz exemplos/sales-order.json
 node packages/core/src/cli.ts schema
 ```
 
-`extrair` é o ciclo da correção: abra o `.bpmn` no bpmn.io, mova e pinte o que quiser, exporte, e o
-comando devolve só o que você mudou, em JSON e em frases.
+`extrair` is the correction loop: open the `.bpmn` in bpmn.io, move and color whatever you want, export it, and the
+command returns only what you changed, as JSON and as sentences.
 
-### Testes
+### Tests
 
 ```bash
 npm test
 npm run typecheck
 ```
 
-## Estrutura
+## Structure
+
+File, function and variable names are in Portuguese.
 
 ```
-packages/core/        núcleo: matriz, portão, layout, renderizadores, correções, CLI
-  src/matriz.ts       schema da matriz (Zod) e JSON Schema para os agentes
-  src/validar.ts      o portão
-  src/layout.ts       layout automático em raias e roteador de setas
-  src/correcoes.ts    aplicar, extrair, comparar e descrever correções
-  src/importar-*.ts   BPMN e Mermaid → matriz
-  src/csv.ts          matriz ↔ CSV
+packages/core/        core: matrix, gate, layout, renderers, corrections, CLI
+  src/matriz.ts       matrix schema (Zod) and JSON Schema for the agents
+  src/validar.ts      the gate
+  src/layout.ts       automatic lane layout and arrow router
+  src/correcoes.ts    apply, extract, compare and describe corrections
+  src/importar-*.ts   BPMN and Mermaid → matrix
+  src/csv.ts          matrix ↔ CSV
+  src/idioma.ts       languages (pt, en)
   src/renderizadores/ bpmn.ts · mermaid.ts · reactflow.ts · svg.ts
-packages/agentes/     Leitor, Mapeador, Revisor, Editor, Conversor e Visual; clientes OpenAI-compatível e Anthropic
-apps/server/          API (Hono) sobre SQLite ou Postgres: mapeamentos, versões, visões, fontes, evidências, execuções
-apps/web/             interface (Vite + React): lista, matriz, bpmn-js, React Flow, Mermaid, IA, configurações
-scripts/dev.ts        sobe API e interface juntas
-scripts/llm-falso.ts  provedor falso para testar os agentes sem chave
-exemplos/             matrizes de exemplo
-docs/                 arquitetura, matriz, roadmap
+packages/agentes/     Reader, Mapper, Reviewer, Editor, Converter and Visual; OpenAI-compatible and Anthropic clients
+apps/server/          API (Hono) on SQLite or Postgres: process maps, versions, views, sources, evidence, runs
+apps/web/             interface (Vite + React): list, matrix, bpmn-js, React Flow, Mermaid, AI, settings
+  src/i18n/           interface texts, in Portuguese and English
+scripts/dev.ts        starts the API and the interface together
+scripts/llm-falso.ts  fake provider for testing the agents without a key
+exemplos/             example matrices
+docs/                 architecture, matrix, roadmap (in Portuguese)
 ```
 
-## Licença
+## License
 
-[GNU AGPL-3.0](LICENSE). Em resumo:
+[GNU AGPL-3.0](LICENSE). In short:
 
-- Você pode usar, estudar, modificar e redistribuir o Bora Mapear, inclusive para fins comerciais.
-- Se distribuir uma versão modificada **ou oferecê-la como serviço pela rede**, tem de disponibilizar o
-  código-fonte dela, sob a mesma licença, para quem a usa. No app, o link **Código-fonte** no topo serve para
-  isso: num fork hospedado, aponte-o para o seu repositório.
-- Usar sem modificar, no seu computador ou na sua empresa, não cria obrigação nenhuma.
+- You can use, study, modify and redistribute Bora Mapear, including for commercial purposes.
+- If you distribute a modified version **or offer it as a service over a network**, you must make its source code
+  available, under the same license, to the people who use it. In the app, the **Source code** link at the top is
+  there for that: in a hosted fork, point it at your repository.
+- Using it unmodified, on your own computer or at your company, creates no obligation.
 
-O resumo não substitui o texto da licença.
+This summary does not replace the license text.

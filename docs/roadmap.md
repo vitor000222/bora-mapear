@@ -55,9 +55,10 @@ Ficou para depois: estilo de espaçamento e de ordem das raias, e posições apr
 - [x] Importar e exportar a matriz em CSV, que abre no Excel e no Google Planilhas
 - [x] Subprocesso que abre o mapeamento filho: criar o filho pela matriz, ligar a um que já existe, duplo clique no desenho para abrir, faixa "Subprocesso de" no filho
 - [x] Interface em inglês: seletor no topo; telas, portão, avisos dos importadores, registro de correções, erros do servidor, exemplo e CSV no idioma escolhido; com a interface em inglês, os agentes escrevem em inglês
+- [x] README em inglês (`README.md`), com a versão em português em `README.pt-BR.md`
 
 Ficou para depois: o `docker compose` ainda não foi rodado de ponta a ponta (o Postgres em si é coberto pela
-suíte sobre PGlite); importar XLSX direto, sem passar por CSV; README e documentação em inglês; a linha de
+suíte sobre PGlite); importar XLSX direto, sem passar por CSV; a documentação de `docs/` em inglês; a linha de
 comando (`cli.ts`) continua só em português.
 
 ## Fase 5 — Na nuvem
