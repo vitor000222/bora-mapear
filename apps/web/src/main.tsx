@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { ProvedorAvisos } from './avisos.tsx';
 import { Lista } from './paginas/Lista.tsx';
 import { PaginaMapeamento } from './paginas/PaginaMapeamento.tsx';
+import { Configuracoes } from './paginas/Configuracoes.tsx';
 import './estilos.css';
 
 function useHash(): string {
@@ -26,8 +27,16 @@ function App() {
           <span>Bora Mapear</span>
         </a>
         <span className="topo-lema">Uma matriz, várias linguagens.</span>
+        <nav className="topo-nav">
+          <a href="#/" aria-current={!id && hash !== '#/config' ? 'page' : undefined}>
+            Mapeamentos
+          </a>
+          <a href="#/config" aria-current={hash === '#/config' ? 'page' : undefined}>
+            Configurações
+          </a>
+        </nav>
       </header>
-      <main className="conteudo">{id ? <PaginaMapeamento key={id} id={id} /> : <Lista />}</main>
+      <main className="conteudo">{id ? <PaginaMapeamento key={id} id={id} /> : hash === '#/config' ? <Configuracoes /> : <Lista />}</main>
     </>
   );
 }

@@ -4,7 +4,7 @@
 documento do processo; os agentes montam a matriz; o Bora Mapear desenha em BPMN, Mermaid ou React Flow.
 Você corrige o desenho, e a correção fica guardada.
 
-> Status: **fase 1 — app local pronto**. Os agentes de IA vêm na fase 2 ([roadmap](docs/roadmap.md)).
+> Status: **fase 2 — agentes de IA prontos**. Próximo: aprender com as correções do usuário ([roadmap](docs/roadmap.md)).
 
 ## A ideia
 
@@ -48,6 +48,7 @@ npm start          # http://127.0.0.1:3737
 | `PORTA` | `3737` | porta do servidor |
 | `HOST` | `127.0.0.1` | troque para `0.0.0.0` para abrir na rede |
 | `BORA_DB` | `data/bora.db` | caminho do arquivo do banco |
+| `BORA_SECRET` | (arquivo `data/segredo.key`) | chave-mestra que cifra as chaves de API |
 
 ### O que dá para fazer
 
@@ -60,6 +61,37 @@ npm start          # http://127.0.0.1:3737
 - **Mermaid**: ver o desenho e editar o código à mão, com prévia ao vivo.
 - **Salvar correções**: só o que você mudou na forma é guardado, por chave, e sobrevive às próximas versões da
   matriz. Cada gravação vira frases no **registro de correções** ("Moveu *Analisar crédito* 60 px para a direita").
+
+## Agentes de IA, com a sua chave
+
+Em **Configurações**, cadastre um provedor e escolha o modelo de cada agente (ou só o padrão):
+
+| Provedor | Como |
+|---|---|
+| OpenRouter, OpenAI, Google Gemini, Groq, DeepSeek | compatível com a API da OpenAI (`/chat/completions`) |
+| Anthropic | SDK oficial, com saída estruturada e *fallback* do lado do servidor nos modelos Claude recentes |
+| Ollama, LM Studio | local, sem chave e sem custo |
+
+Na aba **IA** de um mapeamento:
+
+1. **Fontes**: envie POPs, documentos e transcrições (PDF, DOCX, TXT, MD, VTT, SRT) ou cole texto.
+2. **Leitor**: tira das fontes as **evidências** (EV-001…), trechos copiados literalmente. Cada citação é
+   conferida contra o texto original; a que não bate fica marcada como "não conferida".
+3. **Mapeador**: escreve a matriz a partir das evidências. O **portão** confere; se reprovar, os erros voltam
+   ao agente, até três rodadas. Toda linha aponta a evidência que a sustenta.
+4. **Editor**: "depois de analisar o crédito, a gerência aprova acima de R$ 50 mil" vira operações sobre a
+   matriz, aplicadas por código.
+5. **Revisor**: aponta lacunas, cada uma com a pergunta para fazer ao cliente, e linhas para revisão humana.
+
+Nenhum agente muda a matriz sozinho: cada um devolve uma **proposta**, que você aplica como versão nova ou abre
+na Matriz para revisar antes. Cada execução mostra o progresso, os tokens e o custo.
+
+**Sobre a chave:** fica cifrada (AES-256-GCM) no banco local, nunca volta para o navegador e nunca vai para log.
+A chave-mestra vem de `BORA_SECRET` ou de `data/segredo.key`, criado na primeira vez. As chamadas saem do
+servidor direto para o provedor.
+
+**Sem chave, para testar:** `npm run llm-falso` sobe um provedor falso em `http://127.0.0.1:11435/v1`, que
+responde como cada agente sem chamar modelo nenhum. Cadastre-o como "Ollama (local)" com essa URL.
 
 ## O núcleo sozinho
 
@@ -104,9 +136,11 @@ packages/core/        núcleo: matriz, portão, layout, renderizadores, correç�
   src/layout.ts       layout automático em raias e roteador de setas
   src/correcoes.ts    aplicar, extrair, comparar e descrever correções
   src/renderizadores/ bpmn.ts · mermaid.ts · reactflow.ts
-apps/server/          API (Hono) sobre SQLite: mapeamentos, versões, visões, registro
-apps/web/             interface (Vite + React): lista, grade da matriz, bpmn-js, React Flow, Mermaid
+packages/agentes/     Leitor, Mapeador, Revisor e Editor; clientes OpenAI-compatível e Anthropic
+apps/server/          API (Hono) sobre SQLite: mapeamentos, versões, visões, fontes, evidências, execuções
+apps/web/             interface (Vite + React): lista, matriz, bpmn-js, React Flow, Mermaid, IA, configurações
 scripts/dev.ts        sobe API e interface juntas
+scripts/llm-falso.ts  provedor falso para testar os agentes sem chave
 exemplos/             matrizes de exemplo
 docs/                 arquitetura, matriz, roadmap
 ```

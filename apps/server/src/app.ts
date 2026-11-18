@@ -1,6 +1,6 @@
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
 import { z } from 'zod';
 import {
   LINGUAGENS,
@@ -14,17 +14,12 @@ import {
 } from '@bora-mapear/core';
 import type { Repositorio } from './repositorio.ts';
 import { MODELOS, matrizInicial } from './modelos.ts';
+import { corpo, ErroHttp } from './http.ts';
+import { registrarRotasIa } from './rotas-ia.ts';
+import { Cofre } from './segredo.ts';
+import { Executor } from './execucoes.ts';
 
-/** Erro com status HTTP e mensagem para mostrar ao usuário. */
-export class ErroHttp extends Error {
-  readonly status: 400 | 404 | 409 | 422;
-  readonly detalhes: unknown;
-  constructor(status: 400 | 404 | 409 | 422, mensagem: string, detalhes?: unknown) {
-    super(mensagem);
-    this.status = status;
-    this.detalhes = detalhes;
-  }
-}
+export { ErroHttp } from './http.ts';
 
 const Linguagem = z.enum(LINGUAGENS);
 
@@ -68,20 +63,6 @@ const CorrecoesSchema = z.object({
 
 const NovoCodigo = z.object({ codigo: z.string().max(200_000).nullable() });
 
-async function corpo<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
-  let dado: unknown;
-  try {
-    dado = await c.req.json();
-  } catch {
-    throw new ErroHttp(400, 'O corpo da requisição não é JSON válido.');
-  }
-  const r = schema.safeParse(dado);
-  if (!r.success) {
-    throw new ErroHttp(400, 'Dados inválidos.', r.error.issues.map((i) => `${i.path.join('.') || '(raiz)'}: ${i.message}`));
-  }
-  return r.data;
-}
-
 function matrizOuErro(dado: unknown) {
   try {
     return lerMatriz(dado);
@@ -107,10 +88,17 @@ const TIPOS: Record<string, string> = {
 export interface OpcoesApp {
   /** Pasta do front-end compilado (apps/web/dist). Sem ela, só a API responde. */
   estaticos?: string;
+  /** Cifra das chaves de API. Sem ele, um cofre só de memória (testes). */
+  cofre?: Cofre;
+  executor?: Executor;
+  /** Para testes: o fetch que os agentes usam. */
+  fetch?: typeof fetch;
 }
 
 export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
   const app = new Hono();
+  const cofre = opcoes.cofre ?? Cofre.deSegredo(crypto.randomUUID());
+  const executor = opcoes.executor ?? new Executor(repo);
 
   app.onError((erro, c) => {
     if (erro instanceof ErroHttp) return c.json({ erro: erro.message, detalhes: erro.detalhes ?? null }, erro.status);
@@ -223,6 +211,8 @@ export function criarApp(repo: Repositorio, opcoes: OpcoesApp = {}): Hono {
     await exigirMapeamento(id);
     return c.json(await repo.listarRegistro(id));
   });
+
+  registrarRotasIa(app, { repo, cofre, executor, ...(opcoes.fetch ? { fetch: opcoes.fetch } : {}) });
 
   app.all('/api/*', () => {
     throw new ErroHttp(404, 'Rota não encontrada.');

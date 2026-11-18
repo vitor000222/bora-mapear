@@ -1,0 +1,22 @@
+{
+  "name": "@bora-mapear/agentes",
+  "version": "0.1.0",
+  "description": "Agentes do Bora Mapear: Leitor, Mapeador, Revisor e Editor, com a chave de API do usuário.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0",
+    "@bora-mapear/core": "*",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

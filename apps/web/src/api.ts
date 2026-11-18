@@ -96,6 +96,122 @@ export const api = {
   registro: (id: string) => pedir<RegistroCorrecao[]>('GET', `/api/mapeamentos/${id}/registro`),
 };
 
+// ---------------------------------------------------------------- IA
+
+export type TipoProvedor = 'openai' | 'anthropic';
+export type Esforco = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type AgenteConfiguravel = 'padrao' | 'leitor' | 'mapeador' | 'revisor' | 'editor';
+
+export interface Provedor {
+  id: string;
+  nome: string;
+  tipo: TipoProvedor;
+  urlBase: string;
+  temChave: boolean;
+  finalChave: string | null;
+  criadoEm: string;
+}
+
+export interface ConfigAgente {
+  agente: AgenteConfiguravel;
+  provedorId: string | null;
+  modelo: string;
+  maxTokens: number | null;
+  esforco: Esforco | null;
+}
+
+export interface Fonte {
+  id: string;
+  nome: string;
+  tipo: string;
+  tamanho: number;
+  caracteres: number;
+  evidencias: number;
+  criadoEm: string;
+}
+
+export interface Evidencia {
+  chave: string;
+  fonteId: string;
+  fonte: string;
+  citacao: string;
+  sobre: string;
+  local?: string;
+  nota?: string;
+  verificada: boolean;
+}
+
+export type TipoExecucao = 'ler' | 'mapear' | 'revisar' | 'editar';
+
+export interface Execucao {
+  id: string;
+  mapeamentoId: string;
+  tipo: TipoExecucao;
+  status: 'rodando' | 'concluida' | 'falhou';
+  entrada: Record<string, unknown> | null;
+  saida: Record<string, unknown> | null;
+  log: string[];
+  tokensEntrada: number;
+  tokensSaida: number;
+  custo: number | null;
+  erro: string | null;
+  aplicadaNaVersao: number | null;
+  criadoEm: string;
+  concluidoEm: string | null;
+}
+
+async function enviarArquivos(id: string, arquivos: File[]): Promise<Fonte[]> {
+  const form = new FormData();
+  for (const a of arquivos) form.append('arquivos', a);
+  let resposta: Response;
+  try {
+    resposta = await fetch(`/api/mapeamentos/${id}/fontes`, { method: 'POST', body: form });
+  } catch {
+    throw new ErroApi(0, 'Sem conexão com o servidor do Bora Mapear.');
+  }
+  const dados = (await resposta.json()) as unknown;
+  if (!resposta.ok) {
+    const erro = dados as { erro?: string; detalhes?: unknown };
+    throw new ErroApi(resposta.status, erro.erro ?? `Erro ${resposta.status}`, Array.isArray(erro.detalhes) ? erro.detalhes.map(String) : []);
+  }
+  const avisos = resposta.headers.get('X-Bora-Avisos');
+  if (avisos) throw Object.assign(new ErroApi(207, 'Alguns arquivos não foram aceitos.', decodeURIComponent(avisos).split(' | ')), { aceitos: dados as Fonte[] });
+  return dados as Fonte[];
+}
+
+export const apiIa = {
+  provedores: () => pedir<Provedor[]>('GET', '/api/provedores'),
+  criarProvedor: (d: { nome: string; tipo: TipoProvedor; urlBase: string; chave?: string }) => pedir<Provedor>('POST', '/api/provedores', d),
+  editarProvedor: (id: string, d: { nome?: string; urlBase?: string; chave?: string | null }) => pedir<Provedor>('PATCH', `/api/provedores/${id}`, d),
+  apagarProvedor: (id: string) => pedir<null>('DELETE', `/api/provedores/${id}`),
+  testarProvedor: (id: string, modelo: string) =>
+    pedir<{ ok: boolean; ms: number; erro?: string; uso?: { tokensEntrada: number; tokensSaida: number; custo?: number } }>('POST', `/api/provedores/${id}/testar`, { modelo }),
+  modelos: (id: string) => pedir<string[]>('GET', `/api/provedores/${id}/modelos`),
+  agentes: () => pedir<{ agentes: ConfigAgente[]; descricoes: Record<AgenteConfiguravel, string> }>('GET', '/api/agentes'),
+  salvarAgente: (c: ConfigAgente) => pedir<ConfigAgente>('PUT', `/api/agentes/${c.agente}`, c),
+  fontes: (id: string) => pedir<Fonte[]>('GET', `/api/mapeamentos/${id}/fontes`),
+  fonte: (id: string, fonteId: string) => pedir<Fonte & { texto: string }>('GET', `/api/mapeamentos/${id}/fontes/${fonteId}`),
+  enviarArquivos,
+  colarTexto: (id: string, nome: string, texto: string) => pedir<Fonte[]>('POST', `/api/mapeamentos/${id}/fontes`, { nome, texto }),
+  apagarFonte: (id: string, fonteId: string) => pedir<null>('DELETE', `/api/mapeamentos/${id}/fontes/${fonteId}`),
+  evidencias: (id: string) => pedir<Evidencia[]>('GET', `/api/mapeamentos/${id}/evidencias`),
+  ler: (id: string, fonteIds?: string[]) => pedir<Execucao>('POST', `/api/mapeamentos/${id}/ia/ler`, fonteIds ? { fonteIds } : {}),
+  mapear: (id: string, instrucoes: string) => pedir<Execucao>('POST', `/api/mapeamentos/${id}/ia/mapear`, instrucoes.trim() ? { instrucoes } : {}),
+  revisar: (id: string) => pedir<Execucao>('POST', `/api/mapeamentos/${id}/ia/revisar`, {}),
+  editar: (id: string, pedido: string) => pedir<Execucao>('POST', `/api/mapeamentos/${id}/ia/editar`, { pedido }),
+  execucoes: (id: string) => pedir<Execucao[]>('GET', `/api/mapeamentos/${id}/execucoes`),
+  aplicar: (execId: string, forcar = false) => pedir<{ versao: CabecalhoVersao }>('POST', `/api/execucoes/${execId}/aplicar`, { forcar }),
+};
+
+export function formatarCusto(custo: number | null | undefined): string {
+  if (custo === null || custo === undefined) return '';
+  return custo < 0.01 ? '< US$ 0,01' : `US$ ${custo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export function formatarTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : String(n);
+}
+
 export const NOMES_LINGUAGEM: Record<Linguagem, string> = {
   bpmn: 'BPMN 2.0',
   mermaid: 'Mermaid',

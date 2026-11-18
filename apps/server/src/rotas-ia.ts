@@ -1,0 +1,365 @@
+import type { Hono } from 'hono';
+import { z } from 'zod';
+import {
+  AGENTES,
+  criarCliente,
+  DESCRICOES_AGENTE,
+  editar,
+  ErroAgente,
+  ErroProvedor,
+  gerarJson,
+  lerFonte,
+  listarModelos,
+  mapear,
+  revisar,
+  type ClienteModelo,
+  type ConfigProvedor,
+  type NomeAgente,
+} from '@bora-mapear/agentes';
+import { lerMatriz, validarMatriz, type Matriz } from '@bora-mapear/core';
+import { corpo, ErroHttp } from './http.ts';
+import type { AgenteConfiguravel, Repositorio } from './repositorio.ts';
+import { Cofre, finalDaChave } from './segredo.ts';
+import type { ContextoExecucao, Executor } from './execucoes.ts';
+import { ErroFonte, extrairTexto, TAMANHO_MAXIMO } from './fontes.ts';
+
+export interface DependenciasIa {
+  repo: Repositorio;
+  cofre: Cofre;
+  executor: Executor;
+  fetch?: typeof fetch;
+}
+
+const TipoProvedor = z.enum(['openai', 'anthropic']);
+const UrlBase = z
+  .string()
+  .trim()
+  .url('Informe a URL base, com http:// ou https://.')
+  .refine((u) => /^https?:\/\//i.test(u), 'Use http:// ou https://.');
+const Esforco = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+
+const NovoProvedor = z.object({
+  nome: z.string().trim().min(1).max(80),
+  tipo: TipoProvedor,
+  urlBase: UrlBase,
+  chave: z.string().trim().max(500).optional(),
+});
+const EdicaoProvedor = z.object({
+  nome: z.string().trim().min(1).max(80).optional(),
+  urlBase: UrlBase.optional(),
+  /** Texto troca a chave; null apaga. Ausente, não mexe. */
+  chave: z.string().trim().max(500).nullable().optional(),
+});
+const ConfigAgenteEntrada = z.object({
+  provedorId: z.string().nullable(),
+  modelo: z.string().trim().max(200),
+  maxTokens: z.number().int().min(256).max(200_000).nullable().optional(),
+  esforco: Esforco.nullable().optional(),
+});
+
+const AGENTES_CONFIGURAVEIS: AgenteConfiguravel[] = ['padrao', ...AGENTES];
+
+export function registrarRotasIa(app: Hono, deps: DependenciasIa): void {
+  const { repo, cofre, executor } = deps;
+  const opcoesCliente = deps.fetch ? { fetch: deps.fetch } : {};
+
+  const exigirMapeamento = async (id: string) => {
+    const m = await repo.obterMapeamento(id);
+    if (!m) throw new ErroHttp(404, 'Mapeamento não encontrado.');
+    return m;
+  };
+
+  const configDoProvedor = async (id: string): Promise<ConfigProvedor> => {
+    const p = await repo.obterProvedorComChave(id);
+    if (!p) throw new ErroHttp(404, 'Provedor não encontrado.');
+    let chave: string | undefined;
+    try {
+      chave = p.chaveCifrada ? cofre.decifrar(p.chaveCifrada) : undefined;
+    } catch (erro) {
+      throw new ErroHttp(409, erro instanceof Error ? erro.message : String(erro));
+    }
+    return { tipo: p.tipo, urlBase: p.urlBase, ...(chave ? { chave } : {}) };
+  };
+
+  /** O cliente do agente: a configuração própria dele ou a padrão. Sem nenhuma, 409 com o caminho para resolver. */
+  const clienteDoAgente = async (agente: NomeAgente): Promise<ClienteModelo> => {
+    const configs = await repo.listarConfigAgentes();
+    const completa = (a: AgenteConfiguravel) => configs.find((c) => c.agente === a && c.provedorId && c.modelo.trim());
+    const cfg = completa(agente) ?? completa('padrao');
+    if (!cfg) throw new ErroHttp(409, 'Nenhum modelo configurado. Em Configurações, cadastre um provedor e escolha o modelo padrão.');
+    const provedor = await configDoProvedor(cfg.provedorId!);
+    return criarCliente(
+      provedor,
+      { modelo: cfg.modelo, ...(cfg.maxTokens ? { maxTokens: cfg.maxTokens } : {}), ...(cfg.esforco ? { esforco: cfg.esforco } : {}) },
+      opcoesCliente,
+    );
+  };
+
+  const traduzirErro = (erro: unknown): never => {
+    if (erro instanceof ErroProvedor) throw new ErroHttp(502, erro.message);
+    if (erro instanceof ErroAgente) throw new ErroHttp(422, erro.message);
+    throw erro;
+  };
+
+  // ---------------------------------------------------------------- provedores
+
+  app.get('/api/provedores', async (c) => c.json(await repo.listarProvedores()));
+
+  app.post('/api/provedores', async (c) => {
+    const d = await corpo(c, NovoProvedor);
+    const chave = d.chave || null;
+    const provedor = await repo.criarProvedor({
+      nome: d.nome,
+      tipo: d.tipo,
+      urlBase: d.urlBase,
+      chaveCifrada: chave ? cofre.cifrar(chave) : null,
+      finalChave: chave ? finalDaChave(chave) : null,
+    });
+    return c.json(provedor, 201);
+  });
+
+  app.patch('/api/provedores/:id', async (c) => {
+    const d = await corpo(c, EdicaoProvedor);
+    const campos: Parameters<Repositorio['atualizarProvedor']>[1] = {};
+    if (d.nome !== undefined) campos.nome = d.nome;
+    if (d.urlBase !== undefined) campos.urlBase = d.urlBase;
+    if (d.chave === null || d.chave === '') Object.assign(campos, { chaveCifrada: null, finalChave: null });
+    else if (d.chave !== undefined) Object.assign(campos, { chaveCifrada: cofre.cifrar(d.chave), finalChave: finalDaChave(d.chave) });
+    const p = await repo.atualizarProvedor(c.req.param('id'), campos);
+    if (!p) throw new ErroHttp(404, 'Provedor não encontrado.');
+    return c.json(p);
+  });
+
+  app.delete('/api/provedores/:id', async (c) => {
+    if (!(await repo.apagarProvedor(c.req.param('id')))) throw new ErroHttp(404, 'Provedor não encontrado.');
+    return c.body(null, 204);
+  });
+
+  app.get('/api/provedores/:id/modelos', async (c) => {
+    const provedor = await configDoProvedor(c.req.param('id'));
+    try {
+      return c.json(await listarModelos(provedor, opcoesCliente));
+    } catch (erro) {
+      return traduzirErro(erro);
+    }
+  });
+
+  /** Uma chamada mínima, para saber se a chave e o modelo funcionam antes de gastar com um mapeamento. */
+  app.post('/api/provedores/:id/testar', async (c) => {
+    const { modelo } = await corpo(c, z.object({ modelo: z.string().trim().min(1, 'Informe o modelo a testar.') }));
+    const cliente = criarCliente(await configDoProvedor(c.req.param('id')), { modelo, maxTokens: 512 }, opcoesCliente);
+    const inicio = Date.now();
+    try {
+      const r = await gerarJson(cliente, {
+        sistema: 'Teste de conexão.',
+        usuario: 'Responda com {"ok": true}.',
+        schema: z.object({ ok: z.boolean() }),
+        nomeSchema: 'teste',
+        tentativas: 2,
+      });
+      return c.json({ ok: r.dado.ok, ms: Date.now() - inicio, uso: r.uso });
+    } catch (erro) {
+      if (erro instanceof ErroProvedor || erro instanceof ErroAgente) return c.json({ ok: false, ms: Date.now() - inicio, erro: erro.message });
+      throw erro;
+    }
+  });
+
+  // ---------------------------------------------------------------- agentes
+
+  app.get('/api/agentes', async (c) => {
+    const salvas = await repo.listarConfigAgentes();
+    const agentes = AGENTES_CONFIGURAVEIS.map(
+      (a) => salvas.find((s) => s.agente === a) ?? { agente: a, provedorId: null, modelo: '', maxTokens: null, esforco: null },
+    );
+    return c.json({ agentes, descricoes: { padrao: 'Vale para todo agente sem configuração própria.', ...DESCRICOES_AGENTE } });
+  });
+
+  app.put('/api/agentes/:agente', async (c) => {
+    const agente = c.req.param('agente') as AgenteConfiguravel;
+    if (!AGENTES_CONFIGURAVEIS.includes(agente)) throw new ErroHttp(404, `Agente desconhecido: ${agente}.`);
+    const d = await corpo(c, ConfigAgenteEntrada);
+    if (d.provedorId && !(await repo.obterProvedorComChave(d.provedorId))) throw new ErroHttp(422, 'Provedor não encontrado.');
+    return c.json(await repo.salvarConfigAgente({ agente, provedorId: d.provedorId, modelo: d.modelo, maxTokens: d.maxTokens ?? null, esforco: d.esforco ?? null }));
+  });
+
+  // ---------------------------------------------------------------- fontes e evidências
+
+  app.get('/api/mapeamentos/:id/fontes', async (c) => {
+    await exigirMapeamento(c.req.param('id'));
+    return c.json(await repo.listarFontes(c.req.param('id')));
+  });
+
+  /** Arquivos por multipart (campo "arquivos"), ou texto colado em JSON: { nome, texto }. */
+  app.post('/api/mapeamentos/:id/fontes', async (c) => {
+    const id = c.req.param('id');
+    await exigirMapeamento(id);
+    const criadas = [];
+    if ((c.req.header('content-type') ?? '').includes('application/json')) {
+      const d = await corpo(c, z.object({ nome: z.string().trim().min(1).max(200), texto: z.string().trim().min(1, 'O texto está vazio.').max(2_000_000) }));
+      criadas.push(await repo.criarFonte(id, { nome: d.nome, tipo: 'texto', tamanho: Buffer.byteLength(d.texto), texto: d.texto }));
+      return c.json(criadas, 201);
+    }
+    const corpoForm = await c.req.parseBody({ all: true });
+    const campo = corpoForm['arquivos'];
+    const arquivos = (Array.isArray(campo) ? campo : campo ? [campo] : []).filter((a): a is File => typeof a !== 'string');
+    if (!arquivos.length) throw new ErroHttp(400, 'Nenhum arquivo enviado (campo "arquivos").');
+    const erros: string[] = [];
+    for (const arquivo of arquivos) {
+      if (arquivo.size > TAMANHO_MAXIMO) {
+        erros.push(`"${arquivo.name}" passa de 20 MB.`);
+        continue;
+      }
+      try {
+        const { tipo, texto } = await extrairTexto(arquivo.name, new Uint8Array(await arquivo.arrayBuffer()));
+        criadas.push(await repo.criarFonte(id, { nome: arquivo.name, tipo, tamanho: arquivo.size, texto }));
+      } catch (erro) {
+        if (erro instanceof ErroFonte) erros.push(erro.message);
+        else erros.push(`"${arquivo.name}": não deu para ler (${erro instanceof Error ? erro.message : String(erro)}).`);
+      }
+    }
+    if (!criadas.length) throw new ErroHttp(415, 'Nenhum arquivo foi aceito.', erros);
+    return c.json(criadas, 201, erros.length ? { 'X-Bora-Avisos': encodeURIComponent(erros.join(' | ')) } : {});
+  });
+
+  app.get('/api/mapeamentos/:id/fontes/:fonteId', async (c) => {
+    const f = await repo.obterFonte(c.req.param('id'), c.req.param('fonteId'));
+    if (!f) throw new ErroHttp(404, 'Fonte não encontrada.');
+    return c.json(f);
+  });
+
+  app.delete('/api/mapeamentos/:id/fontes/:fonteId', async (c) => {
+    if (!(await repo.apagarFonte(c.req.param('id'), c.req.param('fonteId')))) throw new ErroHttp(404, 'Fonte não encontrada.');
+    return c.body(null, 204);
+  });
+
+  app.get('/api/mapeamentos/:id/evidencias', async (c) => {
+    await exigirMapeamento(c.req.param('id'));
+    return c.json(await repo.listarEvidencias(c.req.param('id')));
+  });
+
+  // ---------------------------------------------------------------- agentes em ação
+
+  /** Lê as fontes escolhidas (ou as que ainda não foram lidas) e grava as evidências. */
+  const lerFontes = async (mapeamentoId: string, fonteIds: string[], cliente: ClienteModelo, ctx: ContextoExecucao) => {
+    const resumo = [];
+    for (const fonteId of fonteIds) {
+      const fonte = await repo.obterFonte(mapeamentoId, fonteId);
+      if (!fonte) continue;
+      const r = await lerFonte(cliente, { nome: fonte.nome, texto: fonte.texto }, ctx.progresso);
+      ctx.uso(r.uso);
+      const salvas = await repo.substituirEvidencias(mapeamentoId, fonteId, r.evidencias);
+      resumo.push({ fonteId, nome: fonte.nome, evidencias: salvas.length, naoConferidas: salvas.filter((e) => !e.verificada).length });
+    }
+    return resumo;
+  };
+
+  const pendentes = async (mapeamentoId: string) => (await repo.listarFontes(mapeamentoId)).filter((f) => f.evidencias === 0).map((f) => f.id);
+
+  app.post('/api/mapeamentos/:id/ia/ler', async (c) => {
+    const id = c.req.param('id');
+    await exigirMapeamento(id);
+    const { fonteIds } = await corpo(c, z.object({ fonteIds: z.array(z.string()).optional() }));
+    const alvo = fonteIds?.length ? fonteIds : await pendentes(id);
+    if (!alvo.length) throw new ErroHttp(400, 'Todas as fontes já foram lidas. Escolha qual ler de novo, ou envie fontes novas.');
+    const cliente = await clienteDoAgente('leitor');
+    const exec = await executor.iniciar(id, 'ler', { fonteIds: alvo }, async (ctx) => ({ fontes: await lerFontes(id, alvo, cliente, ctx) }));
+    return c.json(exec, 202);
+  });
+
+  app.post('/api/mapeamentos/:id/ia/mapear', async (c) => {
+    const id = c.req.param('id');
+    const mapeamento = await exigirMapeamento(id);
+    const { instrucoes, lerPendentes } = await corpo(c, z.object({ instrucoes: z.string().max(4000).optional(), lerPendentes: z.boolean().default(true) }));
+    const aLer = lerPendentes ? await pendentes(id) : [];
+    if (!aLer.length && !(await repo.listarEvidencias(id)).length) {
+      throw new ErroHttp(400, 'Não há evidências para mapear. Envie documentos, POPs ou transcrições na seção Fontes.');
+    }
+    const leitor = aLer.length ? await clienteDoAgente('leitor') : null;
+    const mapeador = await clienteDoAgente('mapeador');
+    const versaoBase = (await repo.versaoAtual(id))!;
+    const exec = await executor.iniciar(id, 'mapear', { instrucoes: instrucoes ?? null }, async (ctx) => {
+      if (leitor) await lerFontes(id, aLer, leitor, ctx);
+      const evidencias = await repo.listarEvidencias(id);
+      const r = await mapear(
+        mapeador,
+        { nomeProcesso: mapeamento.nome, idProcesso: versaoBase.matriz.processo.id, evidencias, ...(instrucoes ? { instrucoes } : {}) },
+        ctx.progresso,
+      );
+      ctx.uso(r.uso);
+      return { matriz: r.matriz, validacao: r.validacao, rodadas: r.rodadas, avisos: r.avisos, versaoBase: versaoBase.numero, evidencias: evidencias.length };
+    });
+    return c.json(exec, 202);
+  });
+
+  app.post('/api/mapeamentos/:id/ia/revisar', async (c) => {
+    const id = c.req.param('id');
+    await exigirMapeamento(id);
+    const cliente = await clienteDoAgente('revisor');
+    const versao = (await repo.versaoAtual(id))!;
+    const exec = await executor.iniciar(id, 'revisar', { versao: versao.numero }, async (ctx) => {
+      const r = await revisar(cliente, { matriz: versao.matriz, evidencias: await repo.listarEvidencias(id) }, ctx.progresso);
+      ctx.uso(r.uso);
+      return { relatorio: r.relatorio, automaticos: r.automaticos, versao: versao.numero };
+    });
+    return c.json(exec, 202);
+  });
+
+  app.post('/api/mapeamentos/:id/ia/editar', async (c) => {
+    const id = c.req.param('id');
+    await exigirMapeamento(id);
+    const { pedido } = await corpo(c, z.object({ pedido: z.string().trim().min(3, 'Escreva o que mudar.').max(4000) }));
+    const cliente = await clienteDoAgente('editor');
+    const versao = (await repo.versaoAtual(id))!;
+    const exec = await executor.iniciar(id, 'editar', { pedido }, async (ctx) => {
+      const r = await editar(cliente, { matriz: versao.matriz, pedido }, ctx.progresso);
+      ctx.uso(r.uso);
+      return { matriz: r.matriz, operacoes: r.operacoes, resumo: r.resumo, frases: r.frases, validacao: r.validacao, rodadas: r.rodadas, versaoBase: versao.numero };
+    });
+    return c.json(exec, 202);
+  });
+
+  app.get('/api/mapeamentos/:id/execucoes', async (c) => {
+    await exigirMapeamento(c.req.param('id'));
+    return c.json(await repo.listarExecucoes(c.req.param('id')));
+  });
+
+  app.get('/api/execucoes/:id', async (c) => {
+    const e = await repo.obterExecucao(c.req.param('id'));
+    if (!e) throw new ErroHttp(404, 'Execução não encontrada.');
+    return c.json(e);
+  });
+
+  /** Grava a proposta do Mapeador ou do Editor como versão nova da matriz, com o agente como autor. */
+  app.post('/api/execucoes/:id/aplicar', async (c) => {
+    const exec = await repo.obterExecucao(c.req.param('id'));
+    if (!exec) throw new ErroHttp(404, 'Execução não encontrada.');
+    if (exec.tipo !== 'mapear' && exec.tipo !== 'editar') throw new ErroHttp(400, 'Só as propostas do Mapeador e do Editor viram versão.');
+    if (exec.status !== 'concluida') throw new ErroHttp(409, 'A execução ainda não terminou, ou falhou.');
+    if (exec.aplicadaNaVersao !== null) throw new ErroHttp(409, `Esta proposta já virou a versão ${exec.aplicadaNaVersao}.`);
+    const { forcar, mensagem } = await corpo(c, z.object({ forcar: z.boolean().default(false), mensagem: z.string().max(500).optional() }));
+    const saida = exec.saida as { matriz: unknown; versaoBase: number; resumo?: string; evidencias?: number };
+    const atual = (await repo.versaoAtual(exec.mapeamentoId))!;
+    if (atual.numero !== saida.versaoBase && !forcar) {
+      throw new ErroHttp(
+        409,
+        `A matriz mudou desde que o agente trabalhou (v${saida.versaoBase} → v${atual.numero}). Aplicar substitui essas mudanças pela proposta.`,
+        { versaoBase: saida.versaoBase, versaoAtual: atual.numero },
+      );
+    }
+    let matriz: Matriz;
+    try {
+      matriz = lerMatriz(saida.matriz);
+    } catch (erro) {
+      throw new ErroHttp(422, erro instanceof Error ? erro.message : String(erro));
+    }
+    const texto =
+      mensagem?.trim() ||
+      (exec.tipo === 'mapear'
+        ? `Mapeada pelo agente a partir de ${saida.evidencias ?? 0} evidências.`
+        : `${saida.resumo ?? 'Edição do agente.'} (pedido: "${(exec.entrada as { pedido: string }).pedido}")`);
+    const versao = await repo.salvarVersao(exec.mapeamentoId, matriz, exec.tipo === 'mapear' ? 'agente:mapeador' : 'agente:editor', texto);
+    await repo.atualizarExecucao(exec.id, { aplicadaNaVersao: versao.numero });
+    const { matriz: _m, ...cabecalho } = versao;
+    return c.json({ versao: cabecalho, validacao: validarMatriz(matriz) }, 201);
+  });
+}

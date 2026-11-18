@@ -7,6 +7,7 @@ export * from './renderizadores/bpmn.ts';
 export * from './renderizadores/mermaid.ts';
 export * from './renderizadores/reactflow.ts';
 export * from './previa.ts';
+export * from './operacoes.ts';
 
 import type { Matriz } from './matriz.ts';
 import type { Correcoes } from './correcoes.ts';

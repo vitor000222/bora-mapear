@@ -82,11 +82,17 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
 - **O portão não é agente.** É código (`validarMatriz`). Reprovou, os erros voltam ao Mapeador com o
   texto pronto para ele corrigir, até N tentativas. Depois disso, a matriz é entregue com as linhas
   marcadas para revisão humana.
-- **Orquestração:** uma máquina de estados simples em TypeScript, uma tabela de execuções no banco e
-  progresso por SSE. Sem framework pesado de agentes: cada agente é uma função com entrada tipada e
-  saída validada por schema Zod.
-- **Saída estruturada:** o schema Zod da matriz vira JSON Schema (`matrizJsonSchema()`) e vai como
-  *structured output* para o provedor. Provedor sem esse recurso: modo JSON, validação e nova tentativa.
+- **Orquestração:** cada agente é uma função com entrada tipada e saída validada por schema Zod
+  (`packages/agentes`). O servidor roda a execução em segundo plano, grava o progresso, os tokens e o custo
+  na tabela `execucao`, e a interface acompanha. Sem framework de agentes.
+- **Proposta, não ação:** Mapeador e Editor devolvem uma matriz proposta; ela vira versão só quando a pessoa
+  aplica (autor `agente:mapeador` ou `agente:editor`). Se a matriz mudou nesse meio-tempo, o servidor avisa.
+- **Saída estruturada:** o schema Zod vira JSON Schema, limpo para o subconjunto que os provedores aceitam,
+  e vai como `response_format` (compatível com OpenAI) ou `output_config.format` (Anthropic). Provedor sem
+  esse recurso cai sozinho para modo JSON e depois para texto; a resposta é sempre validada, e o erro volta
+  ao modelo para nova tentativa.
+- **Clientes:** compatível com OpenAI por `fetch` (OpenRouter informa o custo de cada chamada); Anthropic pelo
+  SDK oficial, em streaming, com *fallback* do lado do servidor nos modelos Claude recentes.
 
 ## Chave de API do usuário (BYOK)
 
@@ -113,10 +119,10 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
 | `versao_matriz` | número, matriz (JSON), autor (pessoa ou agente), mensagem, data |
 | `visao` | mapeamento × linguagem, correções (JSON), código sobreposto (Mermaid/XML) |
 | `registro_correcao` | visão, antes, depois, frases do que mudou |
-| `fonte` | arquivo enviado, tipo, texto extraído |
-| `evidencia` | fonte, chave `EV-001`, citação literal, posição na fonte |
+| `fonte` | arquivo enviado, tipo, texto extraído (PDF por `unpdf`, DOCX por `mammoth`, legenda limpa) |
+| `evidencia` | fonte, chave `EV-001` (nunca reaproveitada), citação literal, posição, se foi conferida |
 | `execucao` | agente, status, entrada, saída, tokens, custo, erro |
-| `provedor` | tipo, URL base, chave cifrada, modelos |
+| `provedor` | tipo, URL base, chave cifrada, últimos 4 caracteres |
 | `config_agente` | agente → provedor + modelo + parâmetros |
 
 ## Stack
@@ -129,7 +135,7 @@ A linguagem é atributo da visão. Trocar é renderizar a mesma matriz em outra 
 | Front | Vite + React, roteamento por hash | — |
 | Editores | bpmn-js, @xyflow/react, mermaid + CodeMirror, grade para a matriz | padrões de mercado |
 | Servidor | Hono sobre Node | leve, TypeScript nativo |
-| IA | Vercel AI SDK | um contrato para OpenRouter, OpenAI-compatível, Anthropic, Google e Ollama |
+| IA | `fetch` (compatível com OpenAI) + `@anthropic-ai/sdk` | sem camada intermediária; cobre OpenRouter, OpenAI, Gemini, Groq, DeepSeek, Ollama e Anthropic |
 | Banco | SQLite (`node:sqlite`); Postgres na fase 4 | sem dependência nativa |
 | Testes | `node:test` | sem dependência |
 

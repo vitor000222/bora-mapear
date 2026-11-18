@@ -8,11 +8,13 @@ import { VisaoReactFlow } from '../componentes/VisaoReactFlow.tsx';
 import { DiagramaMermaid } from '../componentes/DiagramaMermaid.tsx';
 import { AbaCodigo } from '../componentes/AbaCodigo.tsx';
 import { Historico } from '../componentes/Historico.tsx';
+import { AbaIa } from '../componentes/AbaIa.tsx';
 
-type Aba = 'desenho' | 'matriz' | 'codigo' | 'historico';
+type Aba = 'desenho' | 'matriz' | 'ia' | 'codigo' | 'historico';
 const ABAS: Array<{ id: Aba; nome: string }> = [
   { id: 'desenho', nome: 'Desenho' },
   { id: 'matriz', nome: 'Matriz' },
+  { id: 'ia', nome: 'IA' },
   { id: 'codigo', nome: 'Código' },
   { id: 'historico', nome: 'Histórico' },
 ];
@@ -209,6 +211,25 @@ export function PaginaMapeamento({ id }: { id: string }) {
             aoMudar={setRascunho}
             aoDescartar={() => setRascunho(null)}
             aoSalvar={(m, mensagem) => salvarVersao(m, mensagem)}
+          />
+        </div>
+      )}
+
+      {aba === 'ia' && (
+        <div className="aba-conteudo">
+          <AbaIa
+            id={id}
+            versaoAtual={versao.numero}
+            aoRevisarProposta={(m) => {
+              if (rascunho && !window.confirm('A matriz já tem mudanças não salvas. Trocar pela proposta do agente?')) return;
+              setRascunho(m);
+              setAba('matriz');
+              avisar('Proposta aberta na Matriz como rascunho. Revise e salve a versão.', 'info');
+            }}
+            aoAplicar={async () => {
+              setHistoricoVersao((n) => n + 1);
+              await recarregar();
+            }}
           />
         </div>
       )}

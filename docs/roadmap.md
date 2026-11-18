@@ -24,15 +24,18 @@
 Ficou para depois: correção de rota de seta no React Flow, rótulo de seta movido no bpmn-js e correções
 compartilhadas entre BPMN e React Flow.
 
-## Fase 2 — Agentes
+## Fase 2 — Agentes ✅
 
-- [ ] Cadastro de provedores (OpenRouter, OpenAI-compatível, Anthropic, Google, Ollama) com chave cifrada
-- [ ] Modelo por agente
-- [ ] Leitor: PDF, DOCX, TXT, VTT/SRT → evidências numeradas
-- [ ] Mapeador + portão em laço
-- [ ] Revisor: lacunas e linhas para revisão humana
-- [ ] Editor: "adiciona uma aprovação do gerente depois do orçamento" → patch na matriz
-- [ ] Execuções com progresso ao vivo, tokens e custo
+- [x] Cadastro de provedores (OpenRouter, OpenAI-compatível, Anthropic, Google, Groq, DeepSeek, Ollama, LM Studio) com chave cifrada, teste de conexão e lista de modelos
+- [x] Modelo por agente, com um padrão
+- [x] Leitor: PDF, DOCX, TXT, MD, VTT/SRT → evidências numeradas, cada citação conferida contra a fonte
+- [x] Mapeador + portão em laço (até três rodadas)
+- [x] Revisor: lacunas com a pergunta para o cliente, linhas para revisão humana, conferências automáticas
+- [x] Editor: pedido em português → operações sobre a matriz, aplicadas por código
+- [x] Execuções em segundo plano, com progresso, tokens e custo; propostas aplicadas como versão ou revisadas antes
+- [x] Provedor falso para testar sem chave
+
+Ficou para depois: transcrever áudio e vídeo, OCR de PDF escaneado, e cancelar uma execução em andamento.
 
 ## Fase 3 — Aprender com a correção
 

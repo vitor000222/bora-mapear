@@ -18,6 +18,7 @@
     "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "exemplo": "node packages/core/src/cli.ts renderizar exemplos/pedido-de-venda.json --saida saida",
-    "schema": "node packages/core/src/cli.ts schema"
+    "schema": "node packages/core/src/cli.ts schema",
+    "llm-falso": "node scripts/llm-falso.ts"
   }
 }
