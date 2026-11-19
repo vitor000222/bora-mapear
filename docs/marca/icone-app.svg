@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Bora Mapear">
+  <rect width="128" height="128" rx="16" fill="#1C1C1A"/>
+  <g transform="translate(24 34) scale(0.6667)">
+    <rect x="0" y="0" width="120" height="24" rx="3" fill="#3A3A35"/>
+    <rect x="0" y="34" width="120" height="24" rx="3" fill="#3A3A35"/>
+    <rect x="0" y="68" width="120" height="24" rx="3" fill="#3A3A35"/>
+    <path d="M24 12H42V46H78V80H96" fill="none" stroke="#8EA6FF" stroke-width="7"/>
+    <circle cx="17" cy="12" r="8.5" fill="#1C1C1A" stroke="#8EA6FF" stroke-width="6"/>
+    <rect x="47" y="35" width="26" height="22" rx="4" fill="#8EA6FF"/>
+    <circle cx="103" cy="80" r="10" fill="#FFFFFF"/>
+  </g>
+</svg>

@@ -4,7 +4,6 @@
 
 export const pt = {
   topo: {
-    lema: 'Uma matriz, várias linguagens.',
     mapeamentos: 'Mapeamentos',
     configuracoes: 'Configurações',
     codigoFonte: 'Código-fonte',
@@ -37,7 +36,6 @@ export const pt = {
 
 export const en: typeof pt = {
   topo: {
-    lema: 'One matrix, many notations.',
     mapeamentos: 'Process maps',
     configuracoes: 'Settings',
     codigoFonte: 'Source code',

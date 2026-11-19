@@ -39,7 +39,6 @@ export function Lista() {
       <div className="pagina-cabecalho">
         <div>
           <h1>{t.pagina.titulo}</h1>
-          <p className="suave">{t.pagina.subtitulo}</p>
         </div>
         <div className="barra-visao-acoes">
           <button className="botao" onClick={() => dialogoImportar.current?.showModal()}>

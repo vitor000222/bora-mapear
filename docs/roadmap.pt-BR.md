@@ -60,6 +60,7 @@ Ficou para depois: estilo de espaçamento e de ordem das raias, e posições apr
 - [x] README em inglês (`README.md`), com a versão em português em `README.pt-BR.md`
 - [x] Documentação de `docs/` em inglês (arquitetura, matriz, roadmap), com as versões em português em `*.pt-BR.md`
 - [x] Linha de comando em inglês: comandos e opções com nome em inglês (`validate`, `render`, `extract`, `--output`…) ao lado dos em português; mensagens, rótulos dos arquivos e prévia HTML no idioma escolhido
+- [x] Identidade visual "Raias": símbolo, fontes IBM Plex, cores e componentes na interface (cara de desenho técnico: cantos retos, papel branco, raias no padrão do BPMN), cabeçalho do README e imagem de compartilhamento; guia da marca em `docs/brand.pt-BR.md`
 
 Ficou para depois: o `docker compose` ainda não foi rodado de ponta a ponta (o Postgres em si é coberto pela
 suíte sobre PGlite); importar XLSX direto, sem passar por CSV.

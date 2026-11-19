@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   BaseEdge,
   Background,
+  BackgroundVariant,
   Controls,
   EdgeLabelRenderer,
   Handle,
@@ -80,11 +81,70 @@ function NoRaia({ data }: NodeProps<No>) {
   );
 }
 
+/**
+ * Marcas do BPMN em traço, na cor do texto (emoji muda de cor e de desenho conforme o sistema).
+ * Caixa de 14 × 14.
+ */
+function Marca({ tipo }: { tipo: TipoEtapa | undefined }) {
+  const traco = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  let desenho: ReactNode = null;
+  if (tipo === 'tarefa_usuario')
+    desenho = (
+      <>
+        <circle cx="7" cy="4.6" r="2.4" {...traco} />
+        <path d="M2.6 12.4c0-2.6 2-4.2 4.4-4.2s4.4 1.6 4.4 4.2" {...traco} />
+      </>
+    );
+  else if (tipo === 'tarefa_manual')
+    desenho = <path d="M3.4 8.2V6.4M3.4 8.2c0 2.6 1.4 4.2 3.8 4.2 2.2 0 3.6-1.5 3.6-3.8V5.3M5.2 7.4V3.1M7.1 7.2V2.4M9 7.4V3.3M10.8 6.6V5.3M3.4 6.4c0-.9 1.8-.9 1.8 0M5.2 3.1c0-.9 1.9-.9 1.9 0M7.1 2.4c0-.9 1.9-.9 1.9.1M9 3.3c0-.9 1.8-.9 1.8 0" {...traco} />;
+  else if (tipo === 'tarefa_servico')
+    desenho = (
+      <>
+        <circle cx="7" cy="7" r="4.3" fill="none" stroke="currentColor" strokeWidth="2.2" strokeDasharray="1.7 1.68" />
+        <circle cx="7" cy="7" r="3.2" {...traco} />
+        <circle cx="7" cy="7" r="1.2" {...traco} />
+      </>
+    );
+  else if (tipo === 'tarefa_envio')
+    desenho = (
+      <>
+        <rect x="1.6" y="3.4" width="10.8" height="7.4" rx="0.6" fill="currentColor" />
+        <path d="M1.9 3.8 7 7.6l5.1-3.8" fill="none" stroke="var(--cartao)" strokeWidth="1.1" />
+      </>
+    );
+  else if (tipo === 'tarefa_recebimento' || tipo === 'evento_mensagem')
+    desenho = (
+      <>
+        <rect x="1.6" y="3.4" width="10.8" height="7.4" rx="0.6" {...traco} />
+        <path d="M1.9 3.8 7 7.6l5.1-3.8" {...traco} />
+      </>
+    );
+  else if (tipo === 'tarefa_regra')
+    desenho = (
+      <>
+        <rect x="1.6" y="2.6" width="10.8" height="8.8" rx="0.4" {...traco} />
+        <path d="M1.6 5.2h10.8M1.6 8.3h10.8M4.8 5.2v6.2" {...traco} />
+      </>
+    );
+  else if (tipo === 'evento_timer')
+    desenho = (
+      <>
+        <circle cx="7" cy="7" r="4.6" {...traco} />
+        <path d="M7 4.2V7l1.9 1.3" {...traco} />
+      </>
+    );
+  if (!desenho) return null;
+  return (
+    <svg className="rf-marca" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      {desenho}
+    </svg>
+  );
+}
+
 function NoTarefa({ data }: NodeProps<No>) {
-  const marca = data.tipo === 'tarefa_manual' ? '✋' : data.tipo === 'tarefa_servico' ? '⚙' : data.tipo === 'tarefa_envio' ? '✉' : data.tipo === 'tarefa_recebimento' ? '⧗' : data.tipo === 'tarefa_regra' ? '▤' : data.tipo === 'tarefa_usuario' ? '👤' : '';
   return (
     <div className={`rf-tarefa ${data.tipo === 'subprocesso' ? 'rf-subprocesso' : ''}`} style={cor(data)}>
-      {marca && <span className="rf-marca" aria-hidden>{marca}</span>}
+      <Marca tipo={data.tipo} />
       <span>{data.rotulo}</span>
       {data.tipo === 'subprocesso' && <span className="rf-mais" aria-hidden>+</span>}
       {alcas}
@@ -94,11 +154,10 @@ function NoTarefa({ data }: NodeProps<No>) {
 
 function NoEvento({ data }: NodeProps<No>) {
   const classe = data.tipo === 'inicio' ? 'rf-inicio' : data.tipo === 'fim' ? 'rf-fim' : 'rf-intermediario';
-  const marca = data.tipo === 'evento_timer' ? '◷' : data.tipo === 'evento_mensagem' ? '✉' : '';
   return (
     <div className="rf-evento-caixa">
       <div className={`rf-evento ${classe}`} style={cor(data)}>
-        {marca}
+        <Marca tipo={data.tipo} />
       </div>
       {data.rotulo && <span className="rf-rotulo-externo">{data.rotulo}</span>}
       {alcas}
@@ -286,12 +345,22 @@ export function VisaoReactFlow({ matriz, correcoes, estilo, aoSalvar, filhos }: 
           deleteKeyCode={null}
           fitView
           minZoom={0.2}
+          // Sem cor fixa, a ponta da seta segue --xy-edge-stroke (a tinta do CSS), como a linha.
+          defaultMarkerColor={null}
           proOptions={{ hideAttribution: false }}
         >
-          <Background gap={20} />
+          <Background variant={BackgroundVariant.Lines} gap={24} />
           <ExportarReactFlow matriz={matriz} />
           <Controls showInteractive={false} />
-          <MiniMap pannable zoomable nodeStrokeWidth={2} style={{ width: 160, height: 100 }} />
+          {/* O canvas é sempre claro, então as cores do minimapa podem ser fixas: raia em papel com linha, etapa em grafite. */}
+          <MiniMap
+            pannable
+            zoomable
+            nodeColor={(n) => (n.type === 'raia' ? '#ffffff' : '#5e5e57')}
+            nodeStrokeColor={(n) => (n.type === 'raia' ? '#c3c3ba' : '#5e5e57')}
+            nodeStrokeWidth={3}
+            style={{ width: 140, height: 88 }}
+          />
           {selecionados.length > 0 && (
             <Panel position="top-right" className="paleta">
               <span className="pequeno">{t.reactflow.corDe(selecionados.length)}</span>

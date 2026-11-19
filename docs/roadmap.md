@@ -60,6 +60,7 @@ Left for later: style for spacing and lane order, and learned positions (today t
 - [x] English README (`README.md`), with the Portuguese version in `README.pt-BR.md`
 - [x] English documentation in `docs/` (architecture, matrix, roadmap), with the Portuguese versions in `*.pt-BR.md`
 - [x] English command line: English command and option names (`validate`, `render`, `extract`, `--output`…) next to the Portuguese ones; messages, labels in the files and the HTML preview in the chosen language
+- [x] Visual identity "Raias": symbol, IBM Plex fonts, colors and components in the interface (technical-drawing look: square corners, white paper, BPMN-style lanes), README header and share image; brand guide in `docs/brand.md`
 
 Left for later: `docker compose` has not been run end to end yet (Postgres itself is covered by the suite on
 PGlite); importing XLSX directly, without going through CSV.

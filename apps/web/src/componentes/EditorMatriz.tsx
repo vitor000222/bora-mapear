@@ -63,6 +63,15 @@ function proximoIdRaia(m: Matriz): string {
   return `raia-${n}`;
 }
 
+// Setas desenhadas em SVG: os caracteres ↑ e ↓ saem coloridos em algumas fontes de emoji do Windows.
+function Seta({ para }: { para: 'cima' | 'baixo' }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" style={para === 'baixo' ? { transform: 'rotate(180deg)' } : undefined}>
+      <path d="M7 11.5V2.5M3 6.5L7 2.5L11 6.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function mover<T>(lista: T[], de: number, para: number): T[] {
   if (para < 0 || para >= lista.length) return lista;
   const nova = [...lista];
@@ -245,7 +254,7 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                   />
                   <span className="mono suave pequeno">{r.id}</span>
                   <button className="icone" title={t.raias.subir} aria-label={t.raias.subirRaia} onClick={() => aoMudar({ ...m, raias: mover(m.raias, i, i - 1) })} disabled={i === 0}>
-                    ↑
+                    <Seta para="cima" />
                   </button>
                   <button
                     className="icone"
@@ -254,7 +263,7 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                     onClick={() => aoMudar({ ...m, raias: mover(m.raias, i, i + 1) })}
                     disabled={i === m.raias.length - 1}
                   >
-                    ↓
+                    <Seta para="baixo" />
                   </button>
                   <button
                     className="icone icone-perigo"
@@ -352,10 +361,10 @@ export function EditorMatriz({ matriz: m, sujo, proximaVersao, aoMudar, aoDescar
                           </td>
                           <td className="acoes">
                             <button className="icone" aria-label={t.etapas.subirEtapa} title={t.raias.subir} onClick={() => etapas(mover(m.etapas, i, i - 1))} disabled={i === 0}>
-                              ↑
+                              <Seta para="cima" />
                             </button>
                             <button className="icone" aria-label={t.etapas.descerEtapa} title={t.raias.descer} onClick={() => etapas(mover(m.etapas, i, i + 1))} disabled={i === m.etapas.length - 1}>
-                              ↓
+                              <Seta para="baixo" />
                             </button>
                             <button className="icone icone-perigo" aria-label={t.etapas.removerEtapa} title={t.etapas.removerTitulo} onClick={() => remover(i)}>
                               ✕

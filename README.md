@@ -1,4 +1,9 @@
-# Bora Mapear
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/marca/cabecalho-escuro.png">
+    <img alt="Bora Mapear" src="docs/marca/cabecalho-claro.png" width="840">
+  </picture>
+</p>
 
 **English** · [Português](README.pt-BR.md)
 
@@ -209,7 +214,8 @@ apps/web/             interface (Vite + React): list, matrix, bpmn-js, React Flo
 scripts/dev.ts        starts the API and the interface together
 scripts/llm-falso.ts  fake provider for testing the agents without a key
 exemplos/             example matrices
-docs/                 architecture, matrix, roadmap
+docs/                 architecture, matrix, roadmap, brand
+  marca/              logo, symbol, README header and share images
 ```
 
 ## License
@@ -223,3 +229,6 @@ docs/                 architecture, matrix, roadmap
 - Using it unmodified, on your own computer or at your company, creates no obligation.
 
 This summary does not replace the license text.
+
+The IBM Plex Sans and IBM Plex Mono fonts bundled with the interface are distributed under the SIL Open Font License 1.1.
+The brand is described in [docs/brand.md](docs/brand.md).

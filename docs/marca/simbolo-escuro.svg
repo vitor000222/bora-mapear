@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 92" width="120" height="92" role="img" aria-label="Bora Mapear">
+  <rect x="0" y="0" width="120" height="24" rx="3" fill="#3A3A35"/>
+  <rect x="0" y="34" width="120" height="24" rx="3" fill="#3A3A35"/>
+  <rect x="0" y="68" width="120" height="24" rx="3" fill="#3A3A35"/>
+  <path d="M24 12H42V46H78V80H96" fill="none" stroke="#8EA6FF" stroke-width="6"/>
+  <circle cx="17" cy="12" r="8" fill="#1F1F1D" stroke="#8EA6FF" stroke-width="5"/>
+  <rect x="48" y="36" width="24" height="20" rx="4" fill="#8EA6FF"/>
+  <circle cx="103" cy="80" r="9" fill="#ECEBE6"/>
+</svg>

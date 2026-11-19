@@ -3,7 +3,6 @@
 export const pt = {
   pagina: {
     titulo: 'Mapeamentos',
-    subtitulo: 'Cada mapeamento guarda a matriz do processo, as versões e as correções de cada desenho.',
     importar: 'Importar',
     novo: 'Novo mapeamento',
     erroCarregar: 'Não deu para carregar a lista.',
@@ -64,7 +63,6 @@ export const pt = {
 export const en: typeof pt = {
   pagina: {
     titulo: 'Process maps',
-    subtitulo: 'Each process map keeps the process matrix, its versions and the corrections of each diagram.',
     importar: 'Import',
     novo: 'New process map',
     erroCarregar: 'Could not load the list.',
