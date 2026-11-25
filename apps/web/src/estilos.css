@@ -749,6 +749,14 @@ textarea.entrada {
 .canvas-bpmn .djs-context-pad .entry {
   border-radius: var(--raio-campo);
 }
+/* O bpmn-js foca o desenho a cada clique; o anel padrão do navegador (preto, grosso) só vale para o teclado. */
+.canvas-bpmn svg:focus {
+  outline: none;
+}
+.canvas-bpmn svg:focus-visible {
+  outline: 2px solid var(--marca);
+  outline-offset: -2px;
+}
 
 /* React Flow */
 .canvas-rf {
