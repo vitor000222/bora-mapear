@@ -70,15 +70,18 @@ const CLASSE: Record<TipoEtapa, string> = {
   gateway_evento: 'gateway',
 };
 
+// Tinta sobre papel branco, como no BPMN: a forma diz o tipo (círculo, círculo duplo, losango, caixa).
+// A classe fica no código para quem quiser repintar um tipo de uma vez.
+const TRACO = 'fill:#ffffff,stroke:#1c1c1a,stroke-width:1.5px,color:#1c1c1a';
 const ESTILOS: Record<string, string> = {
-  inicio: 'fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20',
-  fim: 'fill:#ffebee,stroke:#c62828,color:#b71c1c',
-  evento: 'fill:#fffde7,stroke:#9e9d24,color:#33691e',
-  tarefa: 'fill:#eef2ff,stroke:#4f46e5,color:#1e1b4b',
-  manual: 'fill:#fff7ed,stroke:#c2410c,color:#431407',
-  servico: 'fill:#ecfeff,stroke:#0e7490,color:#083344',
-  espera: 'fill:#fdf4ff,stroke:#a21caf,color:#4a044e',
-  gateway: 'fill:#fff8e1,stroke:#f9a825,color:#3e2723',
+  inicio: TRACO,
+  fim: 'fill:#ffffff,stroke:#1c1c1a,stroke-width:3px,color:#1c1c1a',
+  evento: TRACO,
+  tarefa: TRACO,
+  manual: TRACO,
+  servico: TRACO,
+  espera: TRACO,
+  gateway: TRACO,
 };
 
 export interface OpcoesMermaid {

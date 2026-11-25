@@ -55,5 +55,9 @@ segue o BPMN: raia em caixa com linha fina e o nome numa coluna à esquerda, tar
 em traço (nunca emoji), fundo quadriculado. A forma diz o tipo (início fino, fim grosso, losango na decisão), e o
 azul marca só o que está selecionado.
 
+As três visões seguem essas regras: React Flow, BPMN (bpmn-js) e Mermaid desenham em tinta sobre papel branco, com as
+raias na linha forte, IBM Plex nos rótulos e o canvas claro nos dois temas. No Mermaid, as setas são retas. O XML do
+BPMN exportado não leva cor própria, só as que alguém pintou.
+
 Sem degradê e sem brilho. Sombra só no que flutua (diálogo, aviso, paleta de cor), e curta. A hierarquia vem da
 linha e do peso da letra.

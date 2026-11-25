@@ -5,6 +5,7 @@ import 'bpmn-js/dist/assets/diagram-js.css';
 import 'bpmn-js/dist/assets/bpmn-js.css';
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css';
 import 'bpmn-js-color-picker/colors/color-picker.css';
+import { getStrokeColor } from 'bpmn-js/lib/draw/BpmnRenderUtil';
 import {
   aplicarEstilo,
   compararMatrizes,
@@ -61,6 +62,47 @@ interface Canvas {
   viewbox(novo?: Omit<Viewbox, 'scale' | 'inner' | 'outer'>): Viewbox;
 }
 
+// O desenho na cara da marca: tinta sobre papel branco, IBM Plex, raias na linha forte.
+// Só muda como o bpmn-js desenha na tela: o XML exportado não ganha cor nenhuma.
+const TINTA = '#1c1c1a';
+const LINHA_FORTE = '#c3c3ba';
+const FONTE_DESENHO = "'IBM Plex Sans Variable', 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif";
+const PASSO_GRADE = 24;
+const SEM_COR = 'sem-cor';
+
+interface ContextoDesenho {
+  element: { type: string };
+  gfx: SVGGElement;
+  attrs?: object;
+}
+
+/**
+ * Desenha a piscina e as raias com a linha forte, mais clara que a tinta das etapas.
+ * Se a pessoa pintou a borda da raia, vale a cor dela.
+ */
+function LinhaDasRaias(
+  eventBus: { on: (evento: string, prioridade: number, f: (e: unknown, c: ContextoDesenho) => unknown) => void },
+  bpmnRenderer: { drawShape: (gfx: SVGGElement, elemento: object, attrs?: object) => SVGElement },
+) {
+  eventBus.on('render.shape', 1500, (_e, { element, gfx, attrs }) => {
+    if (element.type !== 'bpmn:Participant' && element.type !== 'bpmn:Lane') return undefined;
+    const visual = bpmnRenderer.drawShape(gfx, element, attrs);
+    if (getStrokeColor(element, SEM_COR) === SEM_COR)
+      for (const traco of gfx.querySelectorAll<SVGElement>('rect, path, polyline, line')) traco.style.stroke = LINHA_FORTE;
+    return visual;
+  });
+}
+LinhaDasRaias.$inject = ['eventBus', 'bpmnRenderer'];
+const ModuloRaias = { __init__: ['linhaDasRaias'], linhaDasRaias: ['type', LinhaDasRaias] };
+
+/** A grade do fundo acompanha o zoom e o arrasto do desenho. */
+function moverGrade(el: HTMLElement | null, v: Pick<Viewbox, 'x' | 'y' | 'scale'>) {
+  if (!el) return;
+  const passo = PASSO_GRADE * v.scale;
+  el.style.backgroundSize = `${passo}px ${passo}px`;
+  el.style.backgroundPosition = `${-v.x * v.scale}px ${-v.y * v.scale}px`;
+}
+
 /** Enquadra o desenho deixando livre a faixa da paleta, à esquerda. */
 function enquadrar(canvas: Canvas) {
   const { inner, outer } = canvas.viewbox();
@@ -99,8 +141,17 @@ export function VisaoBpmn({ matriz, correcoes, nomeArquivo, estilo, proximaVersa
   filhosAtuais.current = filhos;
 
   useEffect(() => {
-    const m = new Modeler({ container: recipiente.current!, additionalModules: [CorModule] });
+    const m = new Modeler({
+      container: recipiente.current!,
+      additionalModules: [CorModule, ModuloRaias],
+      bpmnRenderer: { defaultFillColor: '#ffffff', defaultStrokeColor: TINTA, defaultLabelColor: TINTA },
+      textRenderer: {
+        defaultStyle: { fontFamily: FONTE_DESENHO, fontSize: 12, lineHeight: 1.25 },
+        externalStyle: { fontFamily: FONTE_DESENHO, fontSize: 11, lineHeight: 1.25 },
+      },
+    });
     modeler.current = m;
+    m.on('canvas.viewbox.changed', (evento: { viewbox: Viewbox }) => moverGrade(recipiente.current, evento.viewbox));
     m.on('commandStack.changed', () => {
       if (!importando.current) setSujo(true);
     });

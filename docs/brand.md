@@ -56,5 +56,9 @@ state color. Diagrams follow BPMN: a lane is a box with a thin line and its name
 8 px corners, type icons are line drawings (never emoji), and the background is a grid. The shape says the type
 (thin start, thick end, diamond for a decision), and the blue marks only what is selected.
 
+The three views follow these rules: React Flow, BPMN (bpmn-js) and Mermaid draw in ink on white paper, with lanes in
+the strong line, IBM Plex in the labels and the canvas light in both themes. Mermaid arrows are straight. The
+exported BPMN XML carries no color of its own, only the colors someone painted.
+
 No gradients and no glow. Only floating things (dialogs, toasts, the color palette) get a shadow, and a short one.
 Hierarchy comes from lines and font weight.

@@ -686,12 +686,68 @@ textarea.entrada {
 .painel-mermaid {
   padding: var(--e-4);
   overflow: auto;
-  background: var(--cartao);
+  background-color: var(--cartao);
+  background-image: linear-gradient(#efefea 1px, transparent 1px), linear-gradient(90deg, #efefea 1px, transparent 1px);
+  background-size: 24px 24px;
   color: var(--texto);
 }
 .diagrama-mermaid svg {
   max-width: 100%;
   height: auto;
+}
+
+/* BPMN (bpmn-js): os tokens do tema do bpmn.io apontam para as cores da marca.
+   A grade do fundo anda com o desenho (VisaoBpmn.tsx acerta o tamanho e a posição). */
+.canvas-bpmn {
+  background-color: var(--cartao);
+  background-image: linear-gradient(#efefea 1px, transparent 1px), linear-gradient(90deg, #efefea 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.canvas-bpmn.bio-theme-parent,
+.canvas-bpmn .bio-theme-parent {
+  --bio-surface: var(--cartao);
+  --bio-surface-overlay: var(--cartao);
+  --bio-surface-subtle: var(--neutro-suave);
+  --bio-surface-medium: var(--neutro-suave);
+  --bio-surface-inverted: var(--noite);
+  --bio-surface-inverted-subtle: var(--suave);
+  --bio-text: var(--texto);
+  --bio-text-subtle: var(--suave);
+  --bio-text-subtlest: var(--suave);
+  --bio-border: var(--linha-forte);
+  --bio-border-disabled: var(--linha);
+  --bio-primary: var(--marca);
+  --bio-primary-surface: var(--marca-suave);
+  --bio-danger: var(--erro);
+  --bio-danger-surface-subtle: var(--erro-suave);
+  --bio-selected-surface: var(--marca-suave);
+  --bio-selected-text: var(--texto);
+  --bio-focus: var(--marca);
+  --bio-focus-surface: var(--marca-suave);
+  --bio-canvas-accent: var(--marca);
+  --bio-canvas-accent-subtle: #a9b9ee;
+  --bio-shadow: rgb(0 0 0 / 0.18);
+  --bio-shadow-subtle: rgb(0 0 0 / 0.08);
+  --bio-radius-sm: var(--raio-campo);
+  --bio-radius-md: var(--raio-botao);
+  --bio-radius-lg: var(--raio-botao);
+}
+.canvas-bpmn.djs-parent,
+.canvas-bpmn .djs-parent {
+  --popup-font-family: var(--fonte);
+  --search-font-family: var(--fonte);
+  --hover-tooltip-font-family: var(--fonte);
+  --bendpoint-stroke-color: var(--cartao);
+  --resizer-stroke-color: var(--cartao);
+}
+.canvas-bpmn .djs-palette {
+  border: 1px solid var(--linha-forte);
+  border-radius: var(--raio-botao);
+  background: var(--cartao);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.08);
+}
+.canvas-bpmn .djs-context-pad .entry {
+  border-radius: var(--raio-campo);
 }
 
 /* React Flow */

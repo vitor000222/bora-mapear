@@ -6,7 +6,35 @@ import { BotoesExportar } from './BotoesExportar.tsx';
 import { useIdioma, useTextos } from '../i18n/index.tsx';
 
 // Rótulos em texto SVG (não HTML): o PNG e o PDF saem com o texto.
-mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral', htmlLabels: false, flowchart: { htmlLabels: false } });
+// Tema na cara da marca: tinta sobre papel branco, raias (subgraphs) na linha forte, IBM Plex, setas retas
+// (a curva "step" do Mermaid desalinha a ponta da seta).
+const FONTE = "'IBM Plex Sans Variable', 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif";
+mermaid.initialize({
+  startOnLoad: false,
+  securityLevel: 'strict',
+  theme: 'base',
+  htmlLabels: false,
+  fontFamily: FONTE,
+  themeVariables: {
+    fontFamily: FONTE,
+    fontSize: '13px',
+    background: '#ffffff',
+    mainBkg: '#ffffff',
+    primaryColor: '#ffffff',
+    primaryBorderColor: '#1c1c1a',
+    primaryTextColor: '#1c1c1a',
+    secondaryColor: '#f4f4f1',
+    tertiaryColor: '#ffffff',
+    nodeBorder: '#1c1c1a',
+    textColor: '#1c1c1a',
+    lineColor: '#1c1c1a',
+    clusterBkg: '#ffffff',
+    clusterBorder: '#c3c3ba',
+    titleColor: '#1c1c1a',
+    edgeLabelBackground: '#ffffff',
+  },
+  flowchart: { htmlLabels: false, curve: 'linear' },
+});
 let contador = 0;
 
 /** Desenha o código Mermaid (o editado à mão, se houver; senão o gerado da matriz). */
